@@ -1,16 +1,19 @@
 package server_module;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import file_handler.FileTransfer;
+
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Scanner;
 
 public class Server {
     private static ServerSocket serverSocket;
     private ArrayList<Socket> list;
     private int id;
+    private FileTransfer fileTransfer;
+    private static final int MAX_BUFFER = 2;
 
 
 
@@ -18,6 +21,7 @@ public class Server {
     public Server() throws IOException {
         serverSocket = new ServerSocket(5017);
         list = new ArrayList<>();
+        fileTransfer = new FileTransfer();
         id = 1;
     }
 
@@ -29,18 +33,21 @@ public class Server {
             Socket connectionSocket = serverSocket.accept();
             list.add(connectionSocket);
 
-            Thread t = new Thread(){
-                @Override
-                public void run(){
-                    initTransmission(connectionSocket);
-                }
-            };
+            Thread t = new Thread(() -> sendFile(connectionSocket));
 
             t.start();
-            System.out.println("Client [" + id++ + "] is now connected. No. of worker threads = ");
+            System.out.println("\n\nClient [" + id++ + "] is now connected. No. of worker threads = ");
+            System.out.println("IP address of client: " + connectionSocket.getRemoteSocketAddress().toString());
         }
     }
 
+    public void sendFile(Socket socket)
+    {
+        {
+            Scanner sc = new Scanner(System.in);
+            fileTransfer.sendChunks(sc.nextLine(), MAX_BUFFER, socket);
+        }
+    }
 
     //---------------------------Starts Data Transmission -------------------------------//
     public void initTransmission(Socket connectionSocket) {
