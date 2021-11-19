@@ -5,22 +5,20 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 
 public class Server {
     private static ServerSocket serverSocket;
-    private ArrayList<Socket> list;
+    private HashMap<String, Socket> user_list = new HashMap<String, Socket>();
     private int id;
     private static final int MAX_BUFFER = 100;
-    
-    private final String username = "1705110";
 
 
 
     //---------------------------Server Constructor-------------------------------//
     public Server() throws IOException {
         serverSocket = new ServerSocket(5017);
-        list = new ArrayList<>();
         id = 1;
     }
 
@@ -30,7 +28,7 @@ public class Server {
         while(true)
         {
             Socket connectionSocket = serverSocket.accept();
-            list.add(connectionSocket);
+            //list.add(connectionSocket);
 
             Thread t = new Thread(() -> initTransmission(connectionSocket));
 
@@ -41,25 +39,32 @@ public class Server {
     }
 
 
-    //---------------------------Starts Data Transmission -------------------------------//
+    //---------------------------Starts Command/Keyword Transmission -------------------------------//
     public void initTransmission(Socket connectionSocket) {
         while(true)
         {
-            String clientRequests;
-            String clientReplied;
+            String clientRequest;
+            String clientReply;
 
             try
             {
                 BufferedReader inFromClient = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
                 PrintWriter outToClient2 = new PrintWriter(connectionSocket.getOutputStream());
-                clientRequests = inFromClient.readLine();
+                clientRequest = inFromClient.readLine();
 
-                System.out.println("Client msg: " +clientRequests+"ab");
-                if(clientRequests.equals(username))
-                    clientReplied = "Yes:";
-                else clientReplied = "No!";
+                //received request keywords from client
+                System.out.println("Client request: " +clientRequest+"/");
 
-                outToClient2.println(clientReplied);
+                //--------------cases of different requests handled here----------------
+                if(clientRequest.contains("auth:")) //-----LOGIN AUTH REQUEST-------//
+                {
+                    clientReply = authenticateUser(clientRequest.split(":")[1], connectionSocket);
+                    if(clientReply.equals("Yes:")) user_list.put(clientRequest.split(":")[1], connectionSocket);
+                }else clientReply = "Null:";
+
+
+                //----send server reply keywords-----//
+                outToClient2.println(clientReply);
                 outToClient2.flush();
 
             }catch(Exception e)
@@ -70,6 +75,27 @@ public class Server {
         }
     }
     //------------------------End of Transmission---------------------------------------------//
+
+
+    //-----------------------Get Auth Result as a String-------------------------------------//
+    private String authenticateUser(String username, Socket socket)
+    {
+        int ID;
+        try {
+            ID = Integer.parseInt(username);
+            if (ID >= 1705000 && ID <= 1705120)
+            {
+                String str = String.valueOf(ID);
+                Socket temp = user_list.get(str);
+                if(temp == null) return "Yes:";
+                if(temp.getRemoteSocketAddress().toString().equals(socket.getRemoteSocketAddress().toString()))
+                    return "Yes:";
+                else return "IPConflict:";
+            } else return "InvalidUser:";
+        } catch (Exception e) {
+            return "InvalidUser:";
+        }
+    }
 
 
 

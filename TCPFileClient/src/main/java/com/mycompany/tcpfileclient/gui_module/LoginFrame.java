@@ -36,7 +36,7 @@ public class LoginFrame extends JFrame{
     
     public LoginFrame(Socket socket)
     {
-        
+        //----start listening for server requests------//
         Thread t = new Thread(() -> {
             try {
                 authListener(socket);
@@ -50,33 +50,26 @@ public class LoginFrame extends JFrame{
         textField = new JTextField();
         textField.setSize(200, 30);
         textField.setLocation(100, 100);
-        
-        
                         
         messageLabel = new JLabel("Already logged in using another IP");
         messageLabel.setVisible(false);
         messageLabel.setForeground(Color.red);
         messageLabel.setBounds(100, 180, 200, 20);
-        
-        
-        
+
+
         button = new JButton();
         button.setBounds(160, 150, 70, 20);
         button.setText("Login");
         button.addActionListener((ActionEvent e) -> {
-            //System.out.println(textField.getText());
-            //messageLabel.setVisible(true);
+            messageLabel.setVisible(false);
             if(textField.getText() != null) {
-                //TCPFileClient.username = textField.getText();
                 try {
-                    sendCred(textField.getText(), socket);
+                    sendCred("auth:"+textField.getText(), socket);
                 }catch (IOException ex)
                 {
                     System.out.println("Error connecting...");
                 }
             }
-            else TCPFileClient.username = null;
-            
         });
         
         
@@ -86,8 +79,6 @@ public class LoginFrame extends JFrame{
         inputLabel.setBounds(100, 80, 120, 20);
         
 
-        
-        
         this.add(inputLabel);
         this.add(button);
         this.add(textField);
@@ -124,14 +115,21 @@ public class LoginFrame extends JFrame{
             System.out.println("wadup");
             System.out.println(str+"ab");
             if(str.equalsIgnoreCase("Yes:")) {
+                LoginFrame.messageLabel.setVisible(false);
                 TCPFileClient.auth = true;
                 System.out.println("Logged in!!");
                 break;
-            }else {
+            }
+            else if(str.equalsIgnoreCase("InvalidUser:")) {
+                LoginFrame.messageLabel.setText("Invalid User ID");
                 LoginFrame.messageLabel.setVisible(true);
                 System.out.println("received: " + str);
-
-            } 
+            }
+            else if(str.equalsIgnoreCase("IPConflict:")) {
+                LoginFrame.messageLabel.setText("Already logged from another IP!");
+                LoginFrame.messageLabel.setVisible(true);
+                System.out.println("received: " + str);
+            }
         }
     }
    

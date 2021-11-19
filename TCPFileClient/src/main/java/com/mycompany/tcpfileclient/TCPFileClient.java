@@ -17,19 +17,19 @@ import java.io.IOException;
 public class TCPFileClient {
     public static Client client;
     public static boolean auth = false;
-    public static String username = null;
-    
+
     public static void main(String[] args) throws IOException { 
         client = new Client();
         LoginFrame frame = new LoginFrame(client.getSocket());
-        
+
+        //waits for successful login
         while(true)
         {
             if(auth) break;
         }
-        
+
+        //logged in successfully
         System.out.println("Logged in!!!");
-        
-        
+
     }
 }
