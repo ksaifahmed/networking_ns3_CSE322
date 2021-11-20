@@ -4,13 +4,12 @@ package com.mycompany.tcpfileclient.server_module;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
 import java.util.HashMap;
 
 
 public class Server {
     private static ServerSocket serverSocket;
-    private HashMap<String, Socket> user_list = new HashMap<String, Socket>();
+    private final HashMap<String, Socket> user_list;
     private int id;
     private static final int MAX_BUFFER = 100;
 
@@ -19,6 +18,7 @@ public class Server {
     //---------------------------Server Constructor-------------------------------//
     public Server() throws IOException {
         serverSocket = new ServerSocket(5017);
+        user_list = new HashMap<>();
         id = 1;
     }
 
@@ -88,12 +88,26 @@ public class Server {
                 String str = String.valueOf(ID);
                 Socket temp = user_list.get(str);
                 if(temp == null) return "Yes:";
+                if(!checkConnectionStatus(temp)) return "Yes:";
+                System.out.println(temp.getRemoteSocketAddress().toString());
+                System.out.println(socket.getRemoteSocketAddress().toString());
                 if(temp.getRemoteSocketAddress().toString().equals(socket.getRemoteSocketAddress().toString()))
                     return "Yes:";
                 else return "IPConflict:";
             } else return "InvalidUser:";
         } catch (Exception e) {
             return "InvalidUser:";
+        }
+    }
+
+    private boolean checkConnectionStatus(Socket skt)
+    {
+        try {
+            skt.getOutputStream().write(101);
+            return true;
+        } catch (IOException ex) {
+            System.err.println("unable to ping current user's previous ip: "+ skt.getRemoteSocketAddress().toString());
+            return false;
         }
     }
 
