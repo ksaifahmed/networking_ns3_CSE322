@@ -6,9 +6,7 @@
 package com.mycompany.tcpfileclient.gui_module;
 
 import com.mycompany.tcpfileclient.TCPFileClient;
-import com.mycompany.tcpfileclient.client_module.Client;
-import java.awt.Color;
-import java.awt.Dimension;
+import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -19,32 +17,30 @@ import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JTextField;
-import static javax.swing.WindowConstants.EXIT_ON_CLOSE;
-
 
 /**
  *
  * @author USER
  */
 public class LoginFrame extends JFrame{
-    private JButton button;
-    private JTextField textField;
-    private final JLabel inputLabel;
+    private static JButton button;
+    private static JTextField textField;
+    private static JLabel inputLabel;
     public static JLabel messageLabel;
-    //private Socket socket;
-    
     
     public LoginFrame(Socket socket)
     {
         //----start listening for server requests------//
-        Thread t = new Thread(() -> {
-            try {
-                authListener(socket);
-            } catch (IOException ex) {
-                ex.printStackTrace();
-            }
-        });
-        t.start();
+        if(socket != null) {
+            Thread t = new Thread(() -> {
+                try {
+                    authListener(socket);
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+            });
+            t.start();
+        }
         
         
         textField = new JTextField();
@@ -62,7 +58,7 @@ public class LoginFrame extends JFrame{
         button.setText("Login");
         button.addActionListener((ActionEvent e) -> {
             messageLabel.setVisible(false);
-            if(textField.getText() != null) {
+            if(textField.getText() != null && socket != null) {
                 try {
                     sendCred("auth:"+textField.getText(), socket);
                 }catch (IOException ex)
@@ -98,6 +94,16 @@ public class LoginFrame extends JFrame{
         
     }
 
+    //----prevents app launch when server not init----//
+    public static void disconnected()
+    {
+        inputLabel.setText("Server Down!");
+        messageLabel.setVisible(false);
+        textField.setVisible(false);
+        button.setVisible(false);
+    }
+
+    //----sends out username for authentication-----//
     private void sendCred(String username, Socket socket) throws IOException {
         PrintWriter pw = new PrintWriter(socket.getOutputStream());
         
@@ -105,27 +111,28 @@ public class LoginFrame extends JFrame{
         pw.println(username);
         pw.flush();
     }
-    
+
+    //----listens to server for auth response-----//
     private void authListener(Socket socket) throws IOException{
         while(true)
         {
-            System.out.println("hey");
+            System.out.println("Init Listener");
             BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             String str = br.readLine();
-            System.out.println("wadup");
-            System.out.println(str+"ab");
-            if(str.equalsIgnoreCase("Yes:")) {
+            System.out.println("Response Received");
+            System.out.println("Server Says:"+str+"/");
+            if(str.equalsIgnoreCase("Yes:")) {   //-----Successful login------//
                 LoginFrame.messageLabel.setVisible(false);
                 TCPFileClient.auth = true;
-                System.out.println("Logged in!!");
+                System.out.println("Authentication Successful!");
                 break;
             }
-            else if(str.equalsIgnoreCase("InvalidUser:")) {
+            else if(str.equalsIgnoreCase("InvalidUser:")) { //------Unregistered User-----//
                 LoginFrame.messageLabel.setText("Invalid User ID");
                 LoginFrame.messageLabel.setVisible(true);
                 System.out.println("received: " + str);
             }
-            else if(str.equalsIgnoreCase("IPConflict:")) {
+            else if(str.equalsIgnoreCase("IPConflict:")) {  //------Multiple user IP conflict-----//
                 LoginFrame.messageLabel.setText("Already logged from another IP!");
                 LoginFrame.messageLabel.setVisible(true);
                 System.out.println("received: " + str);

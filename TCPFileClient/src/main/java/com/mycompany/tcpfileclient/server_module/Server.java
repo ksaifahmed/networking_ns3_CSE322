@@ -100,6 +100,7 @@ public class Server {
         }
     }
 
+    //------------------Checks whether a Socket Connection is live---------------------//
     private boolean checkConnectionStatus(Socket skt)
     {
         try {

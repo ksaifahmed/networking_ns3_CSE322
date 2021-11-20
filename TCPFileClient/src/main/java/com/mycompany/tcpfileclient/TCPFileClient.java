@@ -6,6 +6,7 @@
 package com.mycompany.tcpfileclient;
 
 import com.mycompany.tcpfileclient.client_module.Client;
+import com.mycompany.tcpfileclient.gui_module.HomeFrame;
 import com.mycompany.tcpfileclient.gui_module.LoginFrame;
 import java.io.IOException;
 
@@ -22,14 +23,18 @@ public class TCPFileClient {
         client = new Client();
         LoginFrame frame = new LoginFrame(client.getSocket());
 
-        //waits for successful login
-        while(true)
-        {
-            if(auth) break;
+        if(client.getSocket() == null) {
+            LoginFrame.disconnected();
         }
 
+        //waits for successful login
+        do {
+            System.out.print(""); //----manual delay----//
+        } while (!auth);
+
         //logged in successfully
-        System.out.println("Logged in!!!");
+        frame.dispose();  //----hide login frame----//
+        HomeFrame homeFrame = new HomeFrame(client.getSocket());  //----init home----//
 
     }
 }
