@@ -44,7 +44,7 @@ public class Server {
         while(true)
         {
             String clientRequest;
-            String clientReply;
+            StringBuilder clientReply;
 
             try
             {
@@ -58,9 +58,22 @@ public class Server {
                 //--------------cases of different requests handled here----------------
                 if(clientRequest.contains("auth:")) //-----LOGIN AUTH REQUEST-------//
                 {
-                    clientReply = authenticateUser(clientRequest.split(":")[1], connectionSocket);
-                    if(clientReply.equals("Yes:")) user_list.put(clientRequest.split(":")[1], connectionSocket);
-                }else clientReply = "Null:";
+                    clientReply = new StringBuilder(authenticateUser(clientRequest.split(":")[1], connectionSocket));
+                    if(clientReply.toString().equals("Yes:")) user_list.put(clientRequest.split(":")[1], connectionSocket);
+                }
+
+                else if(clientRequest.equals("uList:")) { //-----SEND USER LIST REQUEST-------//
+                    clientReply = new StringBuilder("List: ");
+                    String status = "(offline)";
+                    for(HashMap.Entry<String, Socket> user : user_list.entrySet()) {
+                        if(checkConnectionStatus(user.getValue())) {
+                            status = "(active)";
+                        }
+                        clientReply.append(user.getKey()).append(status).append(" ");
+                    }
+                    System.out.println(clientReply);
+                }
+                else clientReply = new StringBuilder("Null:");
 
 
                 //----send server reply keywords-----//
@@ -105,6 +118,8 @@ public class Server {
     {
         try {
             skt.getOutputStream().write(101);
+            skt.getOutputStream().flush();
+            System.out.println("trying to ping ip: "+skt.getRemoteSocketAddress().toString());
             return true;
         } catch (IOException ex) {
             System.err.println("unable to ping current user's previous ip: "+ skt.getRemoteSocketAddress().toString());
