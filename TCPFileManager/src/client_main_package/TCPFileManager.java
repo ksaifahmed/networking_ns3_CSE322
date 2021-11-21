@@ -1,5 +1,6 @@
 package client_main_package;
 
+import client_modules.HomeModule;
 import client_modules.LoginModule;
 
 import java.io.IOException;
@@ -20,7 +21,7 @@ public class TCPFileManager {
 
         //waits for successful login
         Scanner sc = new Scanner(System.in);
-        String username;
+        String username = "";
         while (true){
             try {
                 System.out.print("\n\nEnter ID: ");
@@ -29,12 +30,16 @@ public class TCPFileManager {
                 TimeUnit.MILLISECONDS.sleep(500);
             } catch (Exception ex) {
                 System.err.println("Timer delay error");
-                break;
+                System.exit(0);
             }
             if(auth) break;
         }
 
-        System.out.println("Logged in");
+        System.out.println("Logged in\n\n");
 
+        //----home functions start------//
+        HomeModule homeModule = new HomeModule(client.getSocket(), username);
+        InputHandler inputHandler = new InputHandler();
+        inputHandler.handle(homeModule);
     }
 }
