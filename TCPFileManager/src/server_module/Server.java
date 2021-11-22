@@ -117,6 +117,25 @@ public class Server {
                     }
 
                 }
+
+                else if(clientRequest.contains("Files:1705")) {
+                    String user = clientRequest.split(":")[1];
+                    File dir = new File(user+"/public");
+                    clientReply = new StringBuilder("Files:");
+                    clientReply.append(user).append("?");
+                    File[] list = dir.listFiles();
+
+                    if(list != null) {
+                        for (File f : list) {
+                            if (f.isFile()) {
+                                System.out.println("File " + f.getName());
+                                clientReply.append(f.getName()).append("?");
+                            }
+                        }
+                        if (list.length == 0) clientReply.append("THIS_USER_HAS_NO_PUBLIC_FILES?");
+                    }
+                    clientReply.append("----------------------------------?");
+                }
                 else clientReply = new StringBuilder("Null:");
 
 

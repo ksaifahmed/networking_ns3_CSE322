@@ -17,12 +17,21 @@ public class InputHandler {
         while (true)
         {
             input = sc.nextLine();
-            if (input.equals("-help")) displayCommands();
+            if(input.equals("-help")) displayCommands();
             else if (input.equals("pul")){
                 homeModule.sendServerRequest("uList:");
             }else if(input.equals("ls")){
                 homeModule.sendServerRequest("mFiles:");
-            }
+            }else if(input.contains("ls -o") && input.split(" ").length == 3) {
+                try {
+                    int ID = Integer.parseInt(input.split(" ")[2]);
+                    if(ID >= 1705100 && ID <= 1705120) {
+                        homeModule.sendServerRequest("Files:"+input.split(" ")[2]);
+                    } else System.out.println("Invalid user id!\n\n");
+                } catch (Exception e) {
+                    System.out.println("Invalid user id!\n\n");
+                }
+            }else System.out.println("Invalid command!\n\n");
 
         }
     }
@@ -32,7 +41,7 @@ public class InputHandler {
         System.out.println("Print user list: pul");
         System.out.println("Display messages: dm");
         System.out.println("View my files: ls");
-        System.out.println("View other's files: ls_userID");
+        System.out.println("View other's files: ls -0 user_id");
         System.out.println("\n\n");
     }
 }
