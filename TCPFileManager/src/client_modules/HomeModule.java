@@ -51,6 +51,11 @@ public class HomeModule {
                 data[0] = "List of users:";
                 for(String user: data) System.out.println(user);
                 System.out.println("\n\n");
+            } else if(str.contains("mFiles:")) {
+                String[] data = str.split("\\?");
+                data[0] = "-----My Files-----";
+                for(String filename:data) System.out.println(filename);
+                System.out.println("\n\n");
             }
         }
     }

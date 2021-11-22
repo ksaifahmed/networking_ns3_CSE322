@@ -20,6 +20,8 @@ public class InputHandler {
             if (input.equals("-help")) displayCommands();
             else if (input.equals("pul")){
                 homeModule.sendServerRequest("uList:");
+            }else if(input.equals("ls")){
+                homeModule.sendServerRequest("mFiles:");
             }
 
         }

@@ -10,6 +10,7 @@ import java.util.HashMap;
 public class Server {
     private static ServerSocket serverSocket;
     private final HashMap<String, Socket> user_list;
+    private final HashMap<Socket, String> socket_list;
     private int id;
     private static final int MAX_BUFFER = 100;
 
@@ -19,6 +20,7 @@ public class Server {
     public Server() throws IOException {
         serverSocket = new ServerSocket(5017);
         user_list = new HashMap<>();
+        socket_list = new HashMap<>();
         id = 1;
     }
 
@@ -33,8 +35,8 @@ public class Server {
             Thread t = new Thread(() -> initTransmission(connectionSocket));
 
             t.start();
-            System.out.println("\n\nClient [" + id++ + "] is now connected. No. of worker threads = ");
-            System.out.println("IP address of client: " + connectionSocket.getRemoteSocketAddress().toString());
+            System.out.println("\n\nClient [" + id++ + "] is now connected.");
+            System.out.println("Socket address of client: " + connectionSocket.getRemoteSocketAddress().toString());
         }
     }
 
@@ -59,7 +61,16 @@ public class Server {
                 if(clientRequest.contains("auth:")) //-----LOGIN AUTH REQUEST-------//
                 {
                     clientReply = new StringBuilder(authenticateUser(clientRequest.split(":")[1], connectionSocket));
-                    if(clientReply.toString().equals("Yes:")) user_list.put(clientRequest.split(":")[1], connectionSocket);
+                    if(clientReply.toString().equals("Yes:")) {
+                        user_list.put(clientRequest.split(":")[1], connectionSocket);
+                        socket_list.put(connectionSocket, clientRequest.split(":")[1]);
+                        File dir1 = new File(clientRequest.split(":")[1]+"/public");
+                        File dir2 = new File(clientRequest.split(":")[1]+"/private");
+                        if(!dir1.exists()) { //--- if folder doesn't exist, create ---//
+                            dir1.mkdirs();
+                            dir2.mkdirs();
+                        }
+                    }
                 }
 
                 else if(clientRequest.equals("uList:")) { //-----SEND USER LIST REQUEST-------//
@@ -75,6 +86,36 @@ public class Server {
                     }
                     System.out.println(clientReply);
                     System.out.println(user_list);
+                }
+
+                else if(clientRequest.equals("mFiles:")) {
+                    //---public files---//
+                    File dir = new File(socket_list.get(connectionSocket)+"/public");
+                    File[] list = dir.listFiles();
+                    clientReply = new StringBuilder("mFiles:?");
+                    if(list != null) {
+                        for (File f : list) {
+                            if (f.isFile()) {
+                                System.out.println("File " + f.getName());
+                                clientReply.append(f.getName()).append("(public)?");
+                            }
+                        }
+                        if (list.length == 0) clientReply.append("NO_PUBLIC_FILES?");
+                    }
+                    clientReply.append("----------------------------------?");
+                    //---private files---//
+                    dir = new File(socket_list.get(connectionSocket)+"/private");
+                    list = dir.listFiles();
+                    if(list != null) {
+                        for (File f : list) {
+                            if (f.isFile()) {
+                                System.out.println("File " + f.getName());
+                                clientReply.append(f.getName()).append("(private)?");
+                            }
+                        }
+                        if (list.length == 0) clientReply.append("NO_PRIVATE_FILES?");
+                    }
+
                 }
                 else clientReply = new StringBuilder("Null:");
 
