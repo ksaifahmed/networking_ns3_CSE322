@@ -4,7 +4,10 @@ package server_module;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.Random;
 
 
 public class Server {
@@ -12,13 +15,16 @@ public class Server {
     private final HashMap<String, Socket> user_list;
     private final HashMap<Socket, String> socket_list;
     private int id;
-    private static final int MAX_BUFFER = 100;
+    //-----sizes in KiloBytes-----//
+    private static final int MAX_BUFFER = 52428800; //50MB
+    private static final int MAX_CHUNK_SIZE = 10240; //10KB
+    private static final int MIN_CHUNK_SIZE = 1024; //1KB
 
 
 
     //---------------------------Server Constructor-------------------------------//
     public Server() throws IOException {
-        serverSocket = new ServerSocket(5017);
+        serverSocket = new ServerSocket(6890);
         user_list = new HashMap<>();
         socket_list = new HashMap<>();
         id = 1;
@@ -136,6 +142,18 @@ public class Server {
                     }
                     clientReply.append("----------------------------------?");
                 }
+
+
+                else if(clientRequest.contains("upload?") && clientRequest.split("\\?").length == 4) {
+                    String[] keys = clientRequest.split("\\?");
+                    int filesize = Integer.parseInt(keys[2]);
+                    String access = keys[3], filename = keys[1];
+                    if(isBufferOverflow(filesize)) {
+                        clientReply = new StringBuilder("WARNING: server buffer overflow, try later!");
+                    } else {
+                        clientReply = new StringBuilder("up_yes?"+getRandomChunkSize()+"?"+getFileID(connectionSocket)+"?"+filename+"?"+filesize+"?"+access);
+                    }
+                }
                 else clientReply = new StringBuilder("Null:");
 
 
@@ -193,7 +211,28 @@ public class Server {
     }
 
 
+    private static boolean isBufferOverflow(int filesize) {
+        return false;
+    }
 
+    private int getRandomChunkSize() {
+        return new Random().nextInt((MAX_CHUNK_SIZE - MIN_CHUNK_SIZE) + 1) + MIN_CHUNK_SIZE;
+    }
+
+    private int getRandomPort() {
+        return new Random().nextInt((20000 - 7000) + 1) + 7000;
+    }
+
+    private String getFileID(Socket socket) {
+        Random random = new Random();
+        StringBuilder buffer = new StringBuilder(7);
+        for (int i = 0; i < 7; i++) {
+            int ascii = random.nextInt(122-96) + 97;
+            buffer.append((char) ascii);
+        }
+        String rand_str = buffer.toString();
+        return socket_list.get(socket)+"_"+rand_str;
+    }
 
 
 }

@@ -61,6 +61,10 @@ public class HomeModule {
                 data[0] = "-----Public Files of " + data[0].split(":")[1] + "-----";
                 for(String filename:data) System.out.println(filename);
                 System.out.println("\n\n");
+            } else if (str.contains("up_yes?")) {
+                System.out.println("From server: " + str + "\n\n");
+            } else if(str.contains("WARNING:")) {
+                System.out.println(str+"\n\n");
             }
         }
     }

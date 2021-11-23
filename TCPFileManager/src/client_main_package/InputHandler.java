@@ -2,6 +2,7 @@ package client_main_package;
 
 import client_modules.HomeModule;
 
+import java.io.File;
 import java.util.Scanner;
 
 public class InputHandler {
@@ -31,7 +32,20 @@ public class InputHandler {
                 } catch (Exception e) {
                     System.out.println("Invalid user id!\n\n");
                 }
-            }else System.out.println("Invalid command!\n\n");
+            }else if(input.contains("up") && input.split(" ").length == 3) {
+                String[] keys = input.split(" ");
+                if(!keys[0].equals("up")) System.out.println("Invalid command!\n\n");
+                else if(keys[2].equals("public") || keys[2].equals("private")) {
+                    File file = new File(keys[1]);
+                    if(file.isDirectory()) System.out.println("Select a file not a folder!\n\n");
+                    if(file.exists()) {
+                        homeModule.sendServerRequest("upload?"+file.getName()+"?"+file.length()+"?"+keys[2]);
+                        //System.out.println("upload?"+file.getName()+"?"+file.length()+"?"+keys[2]);
+                    }else System.out.println("File does not exist!\n\n");
+                }else System.out.println("Invalid file access params: either \"public\" or \"private\"\n\n");
+
+            }
+            else System.out.println("Invalid command!\n\n");
 
         }
     }
@@ -42,6 +56,7 @@ public class InputHandler {
         System.out.println("Display messages: dm");
         System.out.println("View my files: ls");
         System.out.println("View other's files: ls -0 user_id");
+        System.out.println("Upload file: up file_name access_param");
         System.out.println("\n\n");
     }
 }

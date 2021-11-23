@@ -10,7 +10,7 @@ public class Client {
 
     public Client() {
         try {
-            socket = new Socket("localhost", 5017);
+            socket = new Socket("localhost", 6890);
             System.out.println("connected to server:" + socket.getRemoteSocketAddress().toString());
         } catch (IOException e) {
             System.err.println("Service Not Available! Error Code: 503");
