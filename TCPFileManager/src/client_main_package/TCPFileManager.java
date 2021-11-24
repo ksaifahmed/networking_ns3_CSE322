@@ -39,7 +39,7 @@ public class TCPFileManager {
 
         //----home functions start------//
         HomeModule homeModule = new HomeModule(client.getSocket(), username);
-        InputHandler inputHandler = new InputHandler();
+        InputHandler inputHandler = new InputHandler(username);
         inputHandler.handle(homeModule);
     }
 }

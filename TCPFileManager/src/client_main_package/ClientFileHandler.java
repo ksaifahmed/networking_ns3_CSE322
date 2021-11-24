@@ -1,9 +1,6 @@
 package client_main_package;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.Socket;
 import java.util.Arrays;
 
@@ -47,6 +44,34 @@ public class ClientFileHandler {
             in.close(); dos.close();
         } catch (IOException ex) {
             System.out.println("Upload Aborted");
+        }
+    }
+
+    public void receive() {
+        int n_chunks = (file_size /chunk_size);
+        int last_chunk = file_size - chunk_size * n_chunks;
+        n_chunks++;
+//        if(chunk_size > file_size) {
+//
+//        }else
+        try {
+            File file = new File("Downloads");
+            if(!file.exists()) file.mkdirs();
+            DataInputStream in = new DataInputStream(socket.getInputStream());
+            FileOutputStream fos = new FileOutputStream("Downloads/"+file_name, true);
+            byte[] chunk = new byte[chunk_size];
+            while((in.read(chunk)) != -1)
+            {
+                System.out.println(Arrays.toString(chunk));
+                System.out.println("chunk_size: "+chunk.length);
+                fos.write(chunk);
+                n_chunks--;
+                if(n_chunks == 1) chunk = new byte[last_chunk];
+                else chunk = new byte[chunk_size];
+            }
+            in.close(); fos.close();
+        } catch (IOException ex) {
+            ex.printStackTrace();
         }
     }
 }

@@ -7,8 +7,10 @@ import java.util.Scanner;
 
 public class InputHandler {
     private final Scanner sc;
+    private final String username;
 
-    public InputHandler() {
+    public InputHandler(String username) {
+        this.username = username;
         sc = new Scanner(System.in);
     }
 
@@ -43,6 +45,19 @@ public class InputHandler {
                     }else System.out.println("File does not exist!\n\n");
                 }else System.out.println("Invalid file access params: either \"public\" or \"private\"\n\n");
 
+            }else if(input.contains("down") && input.split(" ").length == 3) {
+                String[] keys = input.split(" ");
+                if(!keys[0].equals("down")) System.out.println("Invalid command!\n\n");
+                else if (keys[1].equals("public") || keys[1].equals("private")) {
+                    homeModule.sendServerRequest("down?"+keys[1]+"?"+keys[2]+"?"+username); //down?public?filename?user_id
+                }else System.out.println("Invalid file access params: either \"public\" or \"private\"\n\n");
+            }else if(input.contains("down -o") && input.split(" ").length == 4) {
+                String[] keys = input.split(" ");
+                if(!keys[0].equals("down") || !keys[1].equals("-o")) System.out.println("Invalid command!\n\n");
+                else if(!validID(keys[2])) System.out.println("Invalid user id!\n\n");
+                else {
+                    homeModule.sendServerRequest("down?public?"+keys[3]+"?"+keys[2]); //down?public?filename?user_id
+                }
             }
             else System.out.println("Invalid command!\n\n");
 
@@ -54,8 +69,19 @@ public class InputHandler {
         System.out.println("Print user list: pul");
         System.out.println("Display messages: dm");
         System.out.println("View my files: ls");
-        System.out.println("View other's files: ls -0 user_id");
+        System.out.println("View other's files: ls -o user_id");
         System.out.println("Upload file: up file_name access_param");
+        System.out.println("Download my file: down access_param file_name");
+        System.out.println("Download other's file: down -o user_id file_name");
         System.out.println("\n\n");
+    }
+
+    private boolean validID(String id) {
+        try {
+            int ID = Integer.parseInt(id);
+            return ID >= 1705100 && ID <= 1705110;
+        }catch (Exception ex) {
+            return false;
+        }
     }
 }

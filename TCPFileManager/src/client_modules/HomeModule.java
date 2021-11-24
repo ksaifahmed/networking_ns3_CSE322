@@ -73,7 +73,22 @@ public class HomeModule {
                 ClientFileHandler fileHandler = new ClientFileHandler(port, filesize, chunk_size, filename);
                 Thread t = new Thread(fileHandler::upload); t.start();
 
-            } else if(str.contains("WARNING:")) {
+            } else if(str.contains("down_fail?")) {
+                System.out.println(str.split("\\?")[1]+"\n\n");
+            } else if(str.contains("down_yes?")) {
+                System.out.println("From server: " + str + "\n\n");
+                String[] keys = str.split("\\?");
+                int chunk_size = Integer.parseInt(keys[1]);
+                int filesize = Integer.parseInt(keys[3]);
+                int port = Integer.parseInt(keys[2]);
+                String filename = keys[4];
+                //down_yes?chunk_size?port?file_size?filename
+                ClientFileHandler fileHandler = new ClientFileHandler(port, filesize, chunk_size, filename);
+                Thread t = new Thread(fileHandler::receive); t.start();
+            } else if(str.contains("down_msg?")) {
+                System.out.println(str.split("\\?")[1]+"\n\n");
+            }
+            else if(str.contains("WARNING:")) {
                 System.out.println(str+"\n\n");
             }
         }

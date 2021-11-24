@@ -4,8 +4,6 @@ package server_module;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Random;
 
@@ -151,7 +149,7 @@ public class Server {
                     if(isBufferOverflow(filesize)) {
                         clientReply = new StringBuilder("WARNING: server buffer overflow, try later!");
                     } else {
-                        ServerFileHandler fileHandler = new ServerFileHandler(port, filesize, chunk_size, filename, access, socket_list.get(connectionSocket));
+                        ServerUploadHandler fileHandler = new ServerUploadHandler(port, filesize, chunk_size, filename, access, socket_list.get(connectionSocket));
                         System.out.println("Waiting");
                         Thread t = new Thread(() -> {
                             fileHandler.AcceptFileTransfer();
@@ -161,6 +159,31 @@ public class Server {
                         System.out.println("Sent sskdjksjdsk");
                     }
                 }
+
+
+                else if (clientRequest.contains("down?") && clientRequest.split("\\?").length == 4) {
+                    //down?public?filename?user_id
+                    String[] keys = clientRequest.split("\\?");
+                    File file = new File(keys[3]+"/"+keys[1]+"/"+keys[2]);
+                    if(file.exists() && !file.isDirectory() && file.getName().equals(keys[2])) {
+                        int port = getRandomPort(); //down_yes?chunk_size?port?file_size?filename
+                        clientReply = new StringBuilder("down_yes?"+MAX_CHUNK_SIZE+"?"+port+"?"+file.length()+"?"+keys[2]);
+                        ServerDownloadHandler fileHandler = new ServerDownloadHandler(port, (int) file.length(), MAX_CHUNK_SIZE, keys[2], keys[3], keys[1]);
+                        System.out.println("Waiting");
+                        Thread t = new Thread(() -> {
+                            fileHandler.AcceptFileTransfer();
+                            try {
+                                Thread.sleep(50);
+                                fileHandler.sendFile(connectionSocket);
+                            } catch (Exception e) {
+                                System.err.println("Something Went Wrong When Starting Download!");
+                                System.exit(0);
+                            }
+                        }); t.start();
+                    }else clientReply = new StringBuilder("down_fail?"+"Specified File Does Not Exist in Server!");
+                }
+
+
                 else clientReply = new StringBuilder("Null:");
 
 
