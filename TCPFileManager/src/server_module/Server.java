@@ -146,12 +146,19 @@ public class Server {
 
                 else if(clientRequest.contains("upload?") && clientRequest.split("\\?").length == 4) {
                     String[] keys = clientRequest.split("\\?");
-                    int filesize = Integer.parseInt(keys[2]);
+                    int filesize = Integer.parseInt(keys[2]), port = getRandomPort(), chunk_size = getRandomChunkSize();
                     String access = keys[3], filename = keys[1];
                     if(isBufferOverflow(filesize)) {
                         clientReply = new StringBuilder("WARNING: server buffer overflow, try later!");
                     } else {
-                        clientReply = new StringBuilder("up_yes?"+getRandomChunkSize()+"?"+getFileID(connectionSocket)+"?"+filename+"?"+filesize+"?"+access);
+                        ServerFileHandler fileHandler = new ServerFileHandler(port, filesize, chunk_size, filename, access, socket_list.get(connectionSocket));
+                        System.out.println("Waiting");
+                        Thread t = new Thread(() -> {
+                            fileHandler.AcceptFileTransfer();
+                            fileHandler.receiveFile();
+                        }); t.start();
+                        clientReply = new StringBuilder("up_yes?"+chunk_size+"?"+getFileID(connectionSocket)+"?"+filename+"?"+filesize+"?"+access+"?"+port);
+                        System.out.println("Sent sskdjksjdsk");
                     }
                 }
                 else clientReply = new StringBuilder("Null:");

@@ -40,7 +40,6 @@ public class InputHandler {
                     if(file.isDirectory()) System.out.println("Select a file not a folder!\n\n");
                     if(file.exists()) {
                         homeModule.sendServerRequest("upload?"+file.getName()+"?"+file.length()+"?"+keys[2]);
-                        //System.out.println("upload?"+file.getName()+"?"+file.length()+"?"+keys[2]);
                     }else System.out.println("File does not exist!\n\n");
                 }else System.out.println("Invalid file access params: either \"public\" or \"private\"\n\n");
 

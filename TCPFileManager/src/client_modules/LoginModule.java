@@ -16,7 +16,7 @@ public class LoginModule {
                 try {
                     authListener(socket);
                 } catch (IOException ex) {
-                    ex.printStackTrace();
+                    System.err.println("Could not login, system reset!");
                 }
             });
             t.start();

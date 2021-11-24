@@ -1,11 +1,30 @@
 package file_handler;
 
 import java.io.*;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Arrays;
 
 public class FileTransfer {
-    private byte[] data;
+    private ServerSocket fileSocket;
+    private byte[] file_data;
+    private int file_size;
+    private String file_name;
+
+    public FileTransfer(int port, int file_size, String file_name) {
+        try {
+            fileSocket = new ServerSocket(port);
+            this.file_name = file_name;
+            this.file_size = file_size;
+        } catch (IOException ex) {
+            System.err.println("Cannot Connect!");
+        }
+    }
+
+    public void AcceptFileTransfer() throws IOException{
+        fileSocket.accept();
+        System.out.println("File transfer connection established");
+    }
 
     public void sendChunks(String filePath, int chunk_size, Socket socket) {
         try {
@@ -29,7 +48,7 @@ public class FileTransfer {
     public void ReceiveChunk(String filePath, int chunk_size, Socket socket)
     {
         try {
-            data = new byte[100];
+            //file_data = new byte[100];
             DataInputStream in = new DataInputStream(socket.getInputStream());
             FileOutputStream fos = new FileOutputStream(filePath, true);
 
