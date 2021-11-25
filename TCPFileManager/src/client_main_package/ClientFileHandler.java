@@ -33,7 +33,7 @@ public class ClientFileHandler {
             BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
             byte[] chunk = new byte[chunk_size]; int i = 1;
-            socket.setSoTimeout(10000);
+            socket.setSoTimeout(30000);
             while((in.read(chunk)) != -1)
             {
                 //System.out.println(Arrays.toString(chunk));
