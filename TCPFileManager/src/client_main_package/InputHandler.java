@@ -21,11 +21,19 @@ public class InputHandler {
         {
             input = sc.nextLine();
             if(input.equals("-help")) displayCommands();
+
+
             else if (input.equals("pul")){
                 homeModule.sendServerRequest("uList:");
-            }else if(input.equals("ls")){
+            }
+
+
+            else if(input.equals("ls")){
                 homeModule.sendServerRequest("mFiles:");
-            }else if(input.contains("ls -o") && input.split(" ").length == 3) {
+            }
+
+
+            else if(input.contains("ls -o") && input.split(" ").length == 3) {
                 try {
                     int ID = Integer.parseInt(input.split(" ")[2]);
                     if(ID >= 1705100 && ID <= 1705120) {
@@ -34,24 +42,33 @@ public class InputHandler {
                 } catch (Exception e) {
                     System.out.println("Invalid user id!\n\n");
                 }
-            }else if(input.contains("up") && input.split(" ").length == 3) {
+            }
+
+
+            else if(input.contains("up") && input.split(" ").length == 3) {
                 String[] keys = input.split(" ");
                 if(!keys[0].equals("up")) System.out.println("Invalid command!\n\n");
                 else if(keys[2].equals("public") || keys[2].equals("private")) {
                     File file = new File(keys[1]);
                     if(file.isDirectory()) System.out.println("Select a file not a folder!\n\n");
                     if(file.exists()) {
-                        homeModule.sendServerRequest("upload?"+file.getName()+"?"+file.length()+"?"+keys[2]);
+                        homeModule.sendServerRequest("upload?"+file.getName()+"?"+file.length()+"?"+keys[2]+"?"+keys[1]);
                     }else System.out.println("File does not exist!\n\n");
                 }else System.out.println("Invalid file access params: either \"public\" or \"private\"\n\n");
 
-            }else if(input.contains("down") && input.split(" ").length == 3) {
+            }
+
+
+            else if(input.contains("down") && input.split(" ").length == 3) {
                 String[] keys = input.split(" ");
                 if(!keys[0].equals("down")) System.out.println("Invalid command!\n\n");
                 else if (keys[1].equals("public") || keys[1].equals("private")) {
                     homeModule.sendServerRequest("down?"+keys[1]+"?"+keys[2]+"?"+username); //down?public?filename?user_id
                 }else System.out.println("Invalid file access params: either \"public\" or \"private\"\n\n");
-            }else if(input.contains("down -o") && input.split(" ").length == 4) {
+            }
+
+
+            else if(input.contains("down -o") && input.split(" ").length == 4) {
                 String[] keys = input.split(" ");
                 if(!keys[0].equals("down") || !keys[1].equals("-o")) System.out.println("Invalid command!\n\n");
                 else if(!validID(keys[2])) System.out.println("Invalid user id!\n\n");
@@ -59,6 +76,8 @@ public class InputHandler {
                     homeModule.sendServerRequest("down?public?"+keys[3]+"?"+keys[2]); //down?public?filename?user_id
                 }
             }
+
+
             else System.out.println("Invalid command!\n\n");
 
         }

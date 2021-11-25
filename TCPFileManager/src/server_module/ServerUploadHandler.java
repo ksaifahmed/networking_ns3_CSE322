@@ -1,8 +1,6 @@
 package server_module;
 
-import java.io.DataInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Arrays;
@@ -39,26 +37,58 @@ public class ServerUploadHandler {
         int n_chunks = (file_size /chunk_size);
         int last_chunk = file_size - chunk_size * n_chunks;
         n_chunks++;
-//        if(chunk_size > file_size) {
-//
-//        }else
+
         try {
 
             DataInputStream in = new DataInputStream(clientSocket.getInputStream());
             FileOutputStream fos = new FileOutputStream(userID+"/"+access+"/"+file_name, true);
+            PrintWriter pw = new PrintWriter(clientSocket.getOutputStream());
+
             byte[] chunk = new byte[chunk_size];
             while((in.read(chunk)) != -1)
             {
-                System.out.println(Arrays.toString(chunk));
-                System.out.println("chunk_size: "+chunk.length);
+//                System.out.println(Arrays.toString(chunk));
+//                System.out.println("chunk_size: "+chunk.length);
                 fos.write(chunk);
+                pw.println("ack?"); pw.flush();
                 n_chunks--;
+                if(n_chunks == 0) break;
                 if(n_chunks == 1) chunk = new byte[last_chunk];
                 else chunk = new byte[chunk_size];
             }
-            in.close(); fos.close();
-        } catch (IOException ex) {
-            System.err.println("Upload aborted");
+            fos.close();
+            File file = new File(userID+"/"+access+"/"+file_name);
+            System.out.println("F1:"+file_size + ", F2: "+file.length());
+            if(file_size == file.length()) {
+                pw.println("up_done!"); pw.flush();
+            }else {
+                pw.println("up_file_corrupt!"); pw.flush();
+                if(file.exists()) file.delete(); //delete file
+            }
+
+            pw.close(); in.close();
+
+            //closing this socket
+            try {
+                Thread.sleep(50);
+                fileSocket.close();
+            } catch (Exception e) {
+                System.out.println("Could not close file transfer socket");
+            }
+
+
+        } catch (Exception ex) {
+            System.err.println("Upload connection lost");
+            File file = new File(userID+"/"+access+"/"+file_name);
+            if(file.exists()) file.delete(); //delete file
+
+            //closing this socket
+            try {
+                Thread.sleep(50);
+                fileSocket.close();
+            } catch (Exception e) {
+                System.out.println("Could not close file transfer socket");
+            }
         }
     }
 }

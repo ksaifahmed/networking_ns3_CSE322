@@ -142,7 +142,7 @@ public class Server {
                 }
 
 
-                else if(clientRequest.contains("upload?") && clientRequest.split("\\?").length == 4) {
+                else if(clientRequest.contains("upload?") && clientRequest.split("\\?").length == 5) {
                     String[] keys = clientRequest.split("\\?");
                     int filesize = Integer.parseInt(keys[2]), port = getRandomPort(), chunk_size = getRandomChunkSize();
                     String access = keys[3], filename = keys[1];
@@ -155,7 +155,7 @@ public class Server {
                             fileHandler.AcceptFileTransfer();
                             fileHandler.receiveFile();
                         }); t.start();
-                        clientReply = new StringBuilder("up_yes?"+chunk_size+"?"+getFileID(connectionSocket)+"?"+filename+"?"+filesize+"?"+access+"?"+port);
+                        clientReply = new StringBuilder("up_yes?"+chunk_size+"?"+getFileID(connectionSocket)+"?"+keys[4]+"?"+filesize+"?"+access+"?"+port);
                         System.out.println("Sent sskdjksjdsk");
                     }
                 }

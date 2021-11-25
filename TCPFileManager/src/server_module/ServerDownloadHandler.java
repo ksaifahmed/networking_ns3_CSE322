@@ -54,8 +54,8 @@ public class ServerDownloadHandler {
 
             while((in.read(chunk)) != -1)
             {
-                System.out.println(Arrays.toString(chunk));
-                System.out.println("chunk_size: "+chunk.length);
+//                System.out.println(Arrays.toString(chunk));
+//                System.out.println("chunk_size: "+chunk.length);
                 dos.write(chunk);
                 n_chunks--;
                 if(n_chunks == 1) chunk = new byte[last_chunk];
@@ -66,6 +66,17 @@ public class ServerDownloadHandler {
             PrintWriter pw = new PrintWriter(commandSocket.getOutputStream());
             pw.println("down_msg?File Download Successful! Check \"Downloads\" folder");
             pw.flush();
+
+
+            //closing this socket
+            try {
+                Thread.sleep(50);
+                fileSocket.close();
+            } catch (Exception e) {
+                System.out.println("Could not close file transfer socket");
+            }
+
+
         } catch (Exception ex) {
             System.out.println("Download Aborted");
             try {
@@ -77,6 +88,15 @@ public class ServerDownloadHandler {
                 e.printStackTrace();
             }
             ex.printStackTrace();
+
+
+            //closing this socket
+            try {
+                Thread.sleep(50);
+                fileSocket.close();
+            } catch (Exception e) {
+                System.out.println("Could not close file transfer socket");
+            }
         }
     }
 }
