@@ -33,7 +33,7 @@ public class ClientFileHandler {
             BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
             byte[] chunk = new byte[chunk_size]; int i = 1;
-            //socket.setSoTimeout(30000);
+            socket.setSoTimeout(10000);
             while((in.read(chunk)) != -1)
             {
                 //System.out.println(Arrays.toString(chunk));
@@ -54,9 +54,14 @@ public class ClientFileHandler {
             else if(str.equals("up_file_corrupt!")) System.out.println("Upload file size does not match!");
 
             in.close(); dos.close(); br.close(); socket.close();
-        } catch (IOException ex) {
-            System.out.println("Upload Aborted");
-            ex.printStackTrace();
+        } catch (Exception ex) {
+            System.out.println("Upload Aborted...File Removed From Server");
+            //ex.printStackTrace();
+            try {
+                socket.close();
+            } catch (IOException e) {
+                System.out.println("Could not close file transfer connection");
+            }
         }
     }
 
@@ -83,6 +88,11 @@ public class ClientFileHandler {
             in.close(); fos.close(); socket.close();
         } catch (IOException ex) {
             ex.printStackTrace();
+            try {
+                socket.close();
+            } catch (IOException e) {
+                System.out.println("Could not close file transfer connection");
+            }
         }
     }
 }

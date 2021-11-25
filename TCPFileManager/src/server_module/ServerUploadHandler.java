@@ -10,6 +10,9 @@ public class ServerUploadHandler {
     private Socket clientSocket;
     private int file_size, chunk_size;
     private String file_name, access, userID;
+    FileOutputStream fos;
+
+
 
     public ServerUploadHandler(int port, int file_size, int chunk_size, String file_name, String access, String userID) {
         try {
@@ -41,7 +44,7 @@ public class ServerUploadHandler {
         try {
 
             DataInputStream in = new DataInputStream(clientSocket.getInputStream());
-            FileOutputStream fos = new FileOutputStream(userID+"/"+access+"/"+file_name, true);
+            fos = new FileOutputStream(userID+"/"+access+"/"+file_name, true);
             PrintWriter pw = new PrintWriter(clientSocket.getOutputStream());
 
             byte[] chunk = new byte[chunk_size];
@@ -50,6 +53,10 @@ public class ServerUploadHandler {
 //                System.out.println(Arrays.toString(chunk));
 //                System.out.println("chunk_size: "+chunk.length);
                 fos.write(chunk);
+
+                //for testing setSoTimeOut
+                //if (n_chunks == 3) Thread.sleep(10100);
+
                 pw.println("ack?"); pw.flush();
                 n_chunks--;
                 if(n_chunks == 0) break;
@@ -58,12 +65,15 @@ public class ServerUploadHandler {
             }
             fos.close();
             File file = new File(userID+"/"+access+"/"+file_name);
-            System.out.println("F1:"+file_size + ", F2: "+file.length());
+            System.out.println("FileSize:"+file_size + ", Actual Received Size: "+file.length());
             if(file_size == file.length()) {
                 pw.println("up_done!"); pw.flush();
             }else {
                 pw.println("up_file_corrupt!"); pw.flush();
-                if(file.exists()) file.delete(); //delete file
+                if(file.exists()) {
+                    file.delete(); //delete file
+                    System.out.println("Uploaded File DELETED!!");
+                }
             }
 
             pw.close(); in.close();
@@ -79,8 +89,19 @@ public class ServerUploadHandler {
 
         } catch (Exception ex) {
             System.err.println("Upload connection lost");
+            try {
+                fos.close();
+            } catch (Exception fos_e) {
+                System.out.println("Could not close fos!");
+            }
+
             File file = new File(userID+"/"+access+"/"+file_name);
-            if(file.exists()) file.delete(); //delete file
+            System.out.println("name: "+file.getName());
+            if(file.exists()) {
+                file.delete(); //delete file
+                System.out.println("Uploaded File DELETED!!");
+            }
+            //ex.printStackTrace();
 
             //closing this socket
             try {
