@@ -47,6 +47,21 @@ public class InputHandler {
             }
 
 
+            else if(input.contains("upreq") && input.split(" ").length == 3) {
+                String[] keys = input.split(" ");
+                String file_path = keys[1], requestID = keys[2];
+                if(!keys[0].equals("upreq")) System.out.println("Invalid command!\n\n");
+                else {
+                    File file = new File(file_path);
+                    if(file.isDirectory()) System.out.println("Select a file not a folder!\n\n");
+                    if(file.exists()) {
+                        homeModule.sendServerRequest("upload_req?"+file.getName()+"?"+file.length()+"?public?"+file_path+"?"+requestID);
+                    }else System.out.println("File does not exist!\n\n");
+                }
+
+            }
+
+
             else if(input.contains("up") && input.split(" ").length == 3) {
                 String[] keys = input.split(" ");
                 if(!keys[0].equals("up")) System.out.println("Invalid command!\n\n");
@@ -80,6 +95,13 @@ public class InputHandler {
             }
 
 
+            else if(input.contains("down") && input.split(" ").length == 2) {
+                String[] keys = input.split(" ");
+                if(!keys[0].equals("down")) System.out.println("Invalid command!\n\n");
+                else homeModule.sendServerRequest("down?"+keys[1]);
+            }
+
+
             else if(input.equals("req")) {
                 Scanner temp = new Scanner(System.in);
                 System.out.print("Enter a short description: ");
@@ -101,13 +123,21 @@ public class InputHandler {
 
     private void displayCommands() {
         System.out.println("Commands Supported:");
+        System.out.println("----------------------------------");
         System.out.println("Print user list: pul");
-        System.out.println("Display messages: dm");
         System.out.println("View my files: ls");
         System.out.println("View other's files: ls -o user_id");
+        System.out.println("----------------------------------");
         System.out.println("Upload file: up file_name access_param");
+        System.out.println("Upload file against a request: upreq file_name requestID");
+        System.out.println("----------------------------------");
         System.out.println("Download my file: down access_param file_name");
         System.out.println("Download other's file: down -o user_id file_name");
+        System.out.println("Download using fileID: down fileID");
+        System.out.println("----------------------------------");
+        System.out.println("Display Messages: dm");
+        System.out.println("----------------------------------");
+        System.out.println("Request file: req");
         System.out.println("\n\n");
     }
 

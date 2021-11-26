@@ -49,13 +49,13 @@ public class ClientFileHandler {
                 else chunk = new byte[chunk_size];
             }
             String str = br.readLine();
-            System.out.println(str);
-            if(str.equals("up_done!")) System.out.println("Upload successful!");
-            else if(str.equals("up_file_corrupt!")) System.out.println("Upload file size does not match!");
+            //System.out.println(str);
+            if(str.equals("up_done!")) System.out.println("Upload successful!\n\n");
+            else if(str.equals("up_file_corrupt!")) System.out.println("Upload file size does not match!\n\n");
 
             in.close(); dos.close(); br.close(); socket.close();
         } catch (Exception ex) {
-            System.out.println("Upload Aborted...File Removed From Server");
+            System.out.println("Upload Aborted...File Removed From Server\n\n");
             //ex.printStackTrace();
             try {
                 socket.close();

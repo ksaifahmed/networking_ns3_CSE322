@@ -152,6 +152,33 @@ public class Server {
                 }
 
 
+                else if(clientRequest.contains("upload_req?") && clientRequest.split("\\?").length == 6) {
+                    String[] keys = clientRequest.split("\\?");
+                    String requestID = keys[5];
+                    if(requests.get(requestID) == null) {
+                        clientReply = new StringBuilder("WARNING: Request ID Does Not Exist!");
+                    } else {
+                        int port = getRandomPort();
+                        int filesize = Integer.parseInt(keys[2]), chunk_size = getRandomChunkSize();
+                        String access = keys[3], filename = keys[1];
+                        String file_ID = getFileID(connectionSocket);
+                        if(isBufferOverflow(filesize)) {
+                            clientReply = new StringBuilder("WARNING: server buffer overflow, try later!");
+                        } else {
+                            ServerUploadHandler fileHandler = new ServerUploadHandler(port, filesize, chunk_size, filename, access, socket_list.get(connectionSocket), file_ID);
+                            fileHandler.enableRequest(requestID);
+                            System.out.println("Waiting to start...");
+                            Thread t = new Thread(() -> {
+                                fileHandler.AcceptFileTransfer();
+                                fileHandler.receiveFile();
+                            }); t.start();
+                            clientReply = new StringBuilder("up_yes?"+chunk_size+"?"+file_ID+"?"+keys[4]+"?"+filesize+"?"+access+"?"+port);
+                        }
+                    }
+                }
+
+
+
                 else if(clientRequest.contains("upload?") && clientRequest.split("\\?").length == 5) {
                     String[] keys = clientRequest.split("\\?");
                     int filesize = Integer.parseInt(keys[2]), port = getRandomPort(), chunk_size = getRandomChunkSize();
@@ -160,13 +187,12 @@ public class Server {
                         clientReply = new StringBuilder("WARNING: server buffer overflow, try later!");
                     } else {
                         ServerUploadHandler fileHandler = new ServerUploadHandler(port, filesize, chunk_size, filename, access, socket_list.get(connectionSocket), file_ID);
-                        System.out.println("Waiting");
+                        System.out.println("Waiting to start upload..");
                         Thread t = new Thread(() -> {
                             fileHandler.AcceptFileTransfer();
                             fileHandler.receiveFile();
                         }); t.start();
                         clientReply = new StringBuilder("up_yes?"+chunk_size+"?"+file_ID+"?"+keys[4]+"?"+filesize+"?"+access+"?"+port);
-                        System.out.println("Sent sskdjksjdsk");
                     }
                 }
 
@@ -191,6 +217,48 @@ public class Server {
                             }
                         }); t.start();
                     }else clientReply = new StringBuilder("down_fail?"+"Specified File Does Not Exist in Server!");
+                }
+
+                //down?fileID
+                else if (clientRequest.contains("down?") && clientRequest.split("\\?").length == 2) {
+                    String[] keys = clientRequest.split("\\?");
+                    String fileID = keys[1];
+                    System.out.println("file path: " + file_list.get(fileID));
+                    if(file_list.get(fileID) == null) {
+                        clientReply = new StringBuilder("WARNING: File with fileID: "+fileID+" does not exist!");
+                    }
+
+                    else if(file_list.get(fileID).split("/").length != 3) {
+                        System.err.println("File path error!");
+                        clientReply = new StringBuilder("WARNING: File with fileID: "+fileID+" does not exist!");
+                    }
+
+                    else if(file_list.get(fileID).split("/")[1].contains("private") && !socket_list.get(connectionSocket).equals(file_list.get(fileID).split("/")[0])) {
+                        System.err.println(socket_list.get(connectionSocket)+ " is trying to access private file");
+                        clientReply = new StringBuilder("WARNING: File with fileID: "+fileID+" does not exist!");
+                    }
+
+
+                    else {
+                        File file = new File(file_list.get(fileID));
+                        String[] path_list = file_list.get(fileID).split("/");
+                        if(file.exists() && !file.isDirectory()) {
+                            int port = getRandomPort(); //down_yes?chunk_size?port?file_size?filename
+                            clientReply = new StringBuilder("down_yes?"+MAX_CHUNK_SIZE+"?"+port+"?"+file.length()+"?"+file.getName());
+                            ServerDownloadHandler fileHandler = new ServerDownloadHandler(port, (int) file.length(), MAX_CHUNK_SIZE, file.getName(), path_list[0], path_list[1]); //port, filesize, chunk, filename, down_from_user, access
+                            System.out.println("Waiting to download...");
+                            Thread t = new Thread(() -> {
+                                fileHandler.AcceptFileTransfer();
+                                try {
+                                    Thread.sleep(51);
+                                    fileHandler.sendFile(connectionSocket);
+                                } catch (Exception e) {
+                                    System.err.println("Something Went Wrong When Starting Download!");
+                                    System.exit(0);
+                                }
+                            }); t.start();
+                        }else clientReply = new StringBuilder("WARNING: File with fileID: "+fileID+" does not exist!");
+                    }
                 }
 
 
@@ -304,6 +372,11 @@ public class Server {
         for(int i=0; i<= 120; i++) {
             message_list.put("1705"+i, new StringBuilder(""));
         }
+    }
+
+    public static void addMessage(String message, String requestID) {
+        String userID = requests.get(requestID);
+        message_list.get(userID).append(message);
     }
 
 

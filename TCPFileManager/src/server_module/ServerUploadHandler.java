@@ -9,7 +9,8 @@ public class ServerUploadHandler {
     private ServerSocket fileSocket;
     private Socket clientSocket;
     private int file_size, chunk_size;
-    private String file_name, access, userID, fileID;
+    private String file_name, access, userID, fileID, requestID;
+    private boolean isRequest; //requested upload indicator
     FileOutputStream fos;
 
 
@@ -23,6 +24,7 @@ public class ServerUploadHandler {
             this.access = access;
             this.userID = userID;
             this.fileID = fileID;
+            this.isRequest = false;
         } catch (IOException ex) {
             System.err.println("Cannot Connect!");
         }
@@ -36,6 +38,13 @@ public class ServerUploadHandler {
             System.err.println("Cannot establish connection!");
         }
     }
+
+    //sets upload as a request upload!
+    public void enableRequest(String rid) {
+        this.isRequest = true;
+        requestID = rid;
+    }
+
 
     public void receiveFile() {
         int n_chunks = (file_size /chunk_size);
@@ -74,9 +83,17 @@ public class ServerUploadHandler {
             File file = new File(userID+"/"+access+"/"+file_name);
             System.out.println("FileSize:"+file_size + ", Actual Received Size: "+file.length());
 
+            //upload success
             if(file_size == file.length()) {
+                if(isRequest) {
+                    String message = "ReqID: " + requestID + ", Requested file [id = " + fileID + "] uploaded by " + userID +"~";
+                    Server.addMessage(message, requestID);
+                }
                 pw.println("up_done!"); pw.flush();
-            }else {
+
+            }
+
+            else {
                 pw.println("up_file_corrupt!"); pw.flush();
                 if(file.exists()) {
                     file.delete(); //delete file
