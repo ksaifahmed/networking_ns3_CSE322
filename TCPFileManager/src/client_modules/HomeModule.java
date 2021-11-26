@@ -74,12 +74,13 @@ public class HomeModule {
 
 
                 else if (str.contains("up_yes?")) {
-                    System.out.println("From server: " + str + "\n\n");
+                    //System.out.println("From server: " + str + "\n\n");
                     String[] keys = str.split("\\?");
                     int chunk_size = Integer.parseInt(keys[1]);
                     int filesize = Integer.parseInt(keys[4]);
                     int port = Integer.parseInt(keys[6]);
                     String file_ID = keys[2], filename = keys[3], access = keys[5];
+                    System.out.println("From server-> File:" + filename + ", FileID:"+file_ID+", Filesize:"+ filesize +", Access:"+access+", ChunkSize: "+chunk_size +"(bytes)");
                     ClientFileHandler fileHandler = new ClientFileHandler(port, filesize, chunk_size, filename, socket);
                     Thread t = new Thread(fileHandler::upload); t.start();
 
@@ -104,14 +105,25 @@ public class HomeModule {
                 }
 
 
-                else if(str.contains("down_msg?")) {
+                else if(str.contains("down_msg?") || str.contains("req_r?")) {
                     System.out.println(str.split("\\?")[1]+"\n\n");
+                }
+
+
+                else if(str.contains("msg_list~")) {
+                    String[] messages = str.split("~");
+                    messages[0] = "My Messages:";
+                    for (String message : messages) {
+                        System.out.println(message);
+                    }
+                    System.out.println("\n\n");
                 }
 
 
                 else if(str.contains("WARNING:")) {
                     System.out.println(str+"\n\n");
                 }
+
             }
         } catch (IOException ex) {
             socket.close();

@@ -4,6 +4,7 @@ package server_module;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Random;
 
@@ -12,6 +13,12 @@ public class Server {
     private static ServerSocket serverSocket;
     private final HashMap<String, Socket> user_list;
     private final HashMap<Socket, String> socket_list;
+
+    public static final HashMap<String, String> file_list = new HashMap<>();
+    public static final HashMap<String, String> file_ID_list = new HashMap<>();
+    public static final HashMap<String, StringBuilder> message_list = new HashMap<>(); //user, messages
+    public static final HashMap<String, String> requests = new HashMap<>(); //requestID, user
+
     private int id;
     //-----sizes in KiloBytes-----//
     private static final int MAX_BUFFER = 104857600; //100MB
@@ -28,6 +35,7 @@ public class Server {
         socket_list = new HashMap<>();
         FILE_BUFFER = 0;
         id = 1;
+        initMessageList();
     }
 
 
@@ -103,7 +111,7 @@ public class Server {
                         for (File f : list) {
                             if (f.isFile()) {
                                 System.out.println("File " + f.getName());
-                                clientReply.append(f.getName()).append("(public)?");
+                                clientReply.append(f.getName()).append("(public), fileID:").append(file_ID_list.get(socket_list.get(connectionSocket)+"/public/"+f.getName())).append("?");
                             }
                         }
                         if (list.length == 0) clientReply.append("NO_PUBLIC_FILES?");
@@ -116,7 +124,7 @@ public class Server {
                         for (File f : list) {
                             if (f.isFile()) {
                                 System.out.println("File " + f.getName());
-                                clientReply.append(f.getName()).append("(private)?");
+                                clientReply.append(f.getName()).append("(private), fileID:").append(file_ID_list.get(socket_list.get(connectionSocket)+"/private/"+f.getName())).append("?");
                             }
                         }
                         if (list.length == 0) clientReply.append("NO_PRIVATE_FILES?");
@@ -135,7 +143,7 @@ public class Server {
                         for (File f : list) {
                             if (f.isFile()) {
                                 System.out.println("File " + f.getName());
-                                clientReply.append(f.getName()).append("?");
+                                clientReply.append(f.getName()).append(", fileID:").append(user).append("/public/").append(f.getName()).append("?");
                             }
                         }
                         if (list.length == 0) clientReply.append("THIS_USER_HAS_NO_PUBLIC_FILES?");
@@ -147,17 +155,17 @@ public class Server {
                 else if(clientRequest.contains("upload?") && clientRequest.split("\\?").length == 5) {
                     String[] keys = clientRequest.split("\\?");
                     int filesize = Integer.parseInt(keys[2]), port = getRandomPort(), chunk_size = getRandomChunkSize();
-                    String access = keys[3], filename = keys[1];
+                    String access = keys[3], filename = keys[1], file_ID = getFileID(connectionSocket);
                     if(isBufferOverflow(filesize)) {
                         clientReply = new StringBuilder("WARNING: server buffer overflow, try later!");
                     } else {
-                        ServerUploadHandler fileHandler = new ServerUploadHandler(port, filesize, chunk_size, filename, access, socket_list.get(connectionSocket));
+                        ServerUploadHandler fileHandler = new ServerUploadHandler(port, filesize, chunk_size, filename, access, socket_list.get(connectionSocket), file_ID);
                         System.out.println("Waiting");
                         Thread t = new Thread(() -> {
                             fileHandler.AcceptFileTransfer();
                             fileHandler.receiveFile();
                         }); t.start();
-                        clientReply = new StringBuilder("up_yes?"+chunk_size+"?"+getFileID(connectionSocket)+"?"+keys[4]+"?"+filesize+"?"+access+"?"+port);
+                        clientReply = new StringBuilder("up_yes?"+chunk_size+"?"+file_ID+"?"+keys[4]+"?"+filesize+"?"+access+"?"+port);
                         System.out.println("Sent sskdjksjdsk");
                     }
                 }
@@ -183,6 +191,31 @@ public class Server {
                             }
                         }); t.start();
                     }else clientReply = new StringBuilder("down_fail?"+"Specified File Does Not Exist in Server!");
+                }
+
+
+                else if (clientRequest.contains("req~") && clientRequest.split("~").length == 3) {
+                    String[] keys = clientRequest.split("~");
+                    clientReply = new StringBuilder("req_r?Request Received By Server, Request ID: "+ keys[2]);
+                    requests.put(keys[2], socket_list.get(connectionSocket));
+
+                    ///for loop here
+                    for(HashMap.Entry<String, StringBuilder> message : message_list.entrySet()) {
+                        if(message.getKey().equals(socket_list.get(connectionSocket))) {
+                            continue;
+                        }
+                        String str = "Request from " + socket_list.get(connectionSocket) + ", RequestID: " + keys[2] +", Description: "+keys[1]+"~";
+                        message.getValue().append(str);
+                    }
+                }
+
+
+                else if(clientRequest.equals("display_msg?")) {
+                    String message = message_list.get(socket_list.get(connectionSocket)).toString();
+                    message_list.get(socket_list.get(connectionSocket)).setLength(0);
+                    message_list.get(socket_list.get(connectionSocket)).append("");
+                    if(message.equals("")) clientReply = new StringBuilder("msg_list~You have no new messages!");
+                    else clientReply = new StringBuilder("msg_list~"+message);
                 }
 
 
@@ -257,13 +290,20 @@ public class Server {
 
     private String getFileID(Socket socket) {
         Random random = new Random();
-        StringBuilder buffer = new StringBuilder(7);
+        StringBuilder buffer = new StringBuilder(5);
         for (int i = 0; i < 7; i++) {
             int ascii = random.nextInt(122-96) + 97;
             buffer.append((char) ascii);
         }
+
         String rand_str = buffer.toString();
-        return socket_list.get(socket)+"_"+rand_str;
+        return socket_list.get(socket).substring(4)+"_"+rand_str;
+    }
+
+    private void initMessageList() {
+        for(int i=0; i<= 120; i++) {
+            message_list.put("1705"+i, new StringBuilder(""));
+        }
     }
 
 

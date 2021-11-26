@@ -9,12 +9,12 @@ public class ServerUploadHandler {
     private ServerSocket fileSocket;
     private Socket clientSocket;
     private int file_size, chunk_size;
-    private String file_name, access, userID;
+    private String file_name, access, userID, fileID;
     FileOutputStream fos;
 
 
 
-    public ServerUploadHandler(int port, int file_size, int chunk_size, String file_name, String access, String userID) {
+    public ServerUploadHandler(int port, int file_size, int chunk_size, String file_name, String access, String userID, String fileID) {
         try {
             fileSocket = new ServerSocket(port);
             this.file_name = file_name;
@@ -22,6 +22,7 @@ public class ServerUploadHandler {
             this.chunk_size = chunk_size;
             this.access = access;
             this.userID = userID;
+            this.fileID = fileID;
         } catch (IOException ex) {
             System.err.println("Cannot Connect!");
         }
@@ -42,6 +43,8 @@ public class ServerUploadHandler {
         n_chunks++;
 
         Server.FILE_BUFFER += file_size;
+        Server.file_list.put(fileID, userID+"/"+access+"/"+file_name);
+        Server.file_ID_list.put(userID+"/"+access+"/"+file_name, fileID);
         try {
 
             DataInputStream in = new DataInputStream(clientSocket.getInputStream());
@@ -77,6 +80,8 @@ public class ServerUploadHandler {
                 pw.println("up_file_corrupt!"); pw.flush();
                 if(file.exists()) {
                     file.delete(); //delete file
+                    Server.file_list.remove(fileID);
+                    Server.file_ID_list.remove(userID+"/"+access+"/"+file_name);
                     System.out.println("Uploaded File DELETED!!");
                 }
             }
@@ -96,6 +101,8 @@ public class ServerUploadHandler {
         } catch (Exception ex) {
             System.err.println("Upload connection lost");
             Server.FILE_BUFFER -= file_size;
+            Server.file_list.remove(fileID);
+            Server.file_ID_list.remove(userID+"/"+access+"/"+file_name);
             try {
                 fos.close();
             } catch (Exception fos_e) {

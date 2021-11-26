@@ -3,6 +3,8 @@ package client_main_package;
 import client_modules.HomeModule;
 
 import java.io.File;
+import java.net.Socket;
+import java.util.Random;
 import java.util.Scanner;
 
 public class InputHandler {
@@ -78,6 +80,20 @@ public class InputHandler {
             }
 
 
+            else if(input.equals("req")) {
+                Scanner temp = new Scanner(System.in);
+                System.out.print("Enter a short description: ");
+                String desc = temp.nextLine();
+                String reqID = getRequestID();
+                homeModule.sendServerRequest("req~"+desc+"~"+reqID);
+            }
+
+
+            else if(input.equals("dm")) {
+                homeModule.sendServerRequest("display_msg?");
+            }
+
+
             else System.out.println("Invalid command!\n\n");
 
         }
@@ -102,5 +118,17 @@ public class InputHandler {
         }catch (Exception ex) {
             return false;
         }
+    }
+
+    private String getRequestID() {
+        StringBuilder buffer = new StringBuilder(5);
+        Random random = new Random();
+        for (int i = 0; i < 7; i++) {
+            int ascii = random.nextInt(122-96) + 97;
+            buffer.append((char) ascii);
+        }
+
+        String rand_str = buffer.toString();
+        return username.substring(4)+"_"+rand_str;
     }
 }
