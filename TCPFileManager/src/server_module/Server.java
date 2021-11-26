@@ -14,9 +14,10 @@ public class Server {
     private final HashMap<Socket, String> socket_list;
     private int id;
     //-----sizes in KiloBytes-----//
-    private static final int MAX_BUFFER = 52428800; //50MB
+    private static final int MAX_BUFFER = 104857600; //100MB
     private static final int MAX_CHUNK_SIZE = 10240; //10KB
     private static final int MIN_CHUNK_SIZE = 1024; //1KB
+    public static int FILE_BUFFER;
 
 
 
@@ -25,6 +26,7 @@ public class Server {
         serverSocket = new ServerSocket(6890);
         user_list = new HashMap<>();
         socket_list = new HashMap<>();
+        FILE_BUFFER = 0;
         id = 1;
     }
 
@@ -242,7 +244,7 @@ public class Server {
 
 
     private static boolean isBufferOverflow(int filesize) {
-        return false;
+        return FILE_BUFFER + filesize >= MAX_BUFFER;
     }
 
     private int getRandomChunkSize() {

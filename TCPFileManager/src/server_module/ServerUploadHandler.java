@@ -41,11 +41,13 @@ public class ServerUploadHandler {
         int last_chunk = file_size - chunk_size * n_chunks;
         n_chunks++;
 
+        Server.FILE_BUFFER += file_size;
         try {
 
             DataInputStream in = new DataInputStream(clientSocket.getInputStream());
             fos = new FileOutputStream(userID+"/"+access+"/"+file_name, true);
             PrintWriter pw = new PrintWriter(clientSocket.getOutputStream());
+
 
             byte[] chunk = new byte[chunk_size];
             while((in.read(chunk)) != -1)
@@ -53,6 +55,8 @@ public class ServerUploadHandler {
 //                System.out.println(Arrays.toString(chunk));
 //                System.out.println("chunk_size: "+chunk.length);
                 fos.write(chunk);
+
+                //System.out.println("buffer: "+Server.FILE_BUFFER);
 
                 //for testing setSoTimeOut
                 //if (n_chunks == 3) Thread.sleep(10100);
@@ -66,6 +70,7 @@ public class ServerUploadHandler {
             fos.close();
             File file = new File(userID+"/"+access+"/"+file_name);
             System.out.println("FileSize:"+file_size + ", Actual Received Size: "+file.length());
+
             if(file_size == file.length()) {
                 pw.println("up_done!"); pw.flush();
             }else {
@@ -76,6 +81,7 @@ public class ServerUploadHandler {
                 }
             }
 
+            Server.FILE_BUFFER -= file_size;
             pw.close(); in.close();
 
             //closing this socket
@@ -89,6 +95,7 @@ public class ServerUploadHandler {
 
         } catch (Exception ex) {
             System.err.println("Upload connection lost");
+            Server.FILE_BUFFER -= file_size;
             try {
                 fos.close();
             } catch (Exception fos_e) {
