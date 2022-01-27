@@ -21,6 +21,7 @@
 #include "ns3/point-to-point-module.h"
 #include "ns3/applications-module.h"
 #include "ns3/stats-module.h"
+#include "ns3/flow-monitor-module.h"
 
 using namespace ns3;
 
@@ -189,28 +190,62 @@ MyApp::ScheduleTx (void)
 static void
 CwndChange (Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
 {
-  NS_LOG_UNCOND (Simulator::Now ().GetSeconds () << "\t" << newCwnd);
+  //NS_LOG_UNCOND (Simulator::Now ().GetSeconds () << "\t" << newCwnd);
   *stream->GetStream () << Simulator::Now ().GetSeconds () << "\t" << oldCwnd << "\t" << newCwnd << std::endl;
 }
 
 static void
 RxDrop (Ptr<PcapFileWrapper> file, Ptr<const Packet> p)
 {
-  NS_LOG_UNCOND ("RxDrop at " << Simulator::Now ().GetSeconds ());
+  //NS_LOG_UNCOND ("RxDrop at " << Simulator::Now ().GetSeconds ());
   file->Write (Simulator::Now (), p);
+}
+
+
+void loop_delay()
+{
+  double d = 0.2323;
+  for(int i=0; i < 10000000; i++)
+  {
+    d += d * 24.34;
+  }
+}
+
+FlowMonitorHelper flowmon;
+Ptr<FlowMonitor> monitor;
+uint64_t init_rx = 0; //initial bytes received
+
+void ShowTput()
+{
+  Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowmon.GetClassifier ());
+  std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats();
+  
+  for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator iter = stats.begin (); iter != stats.end (); ++iter)
+  {
+    NS_LOG_UNCOND("Throughput =" <<(abs(iter->second.rxBytes - init_rx) * 8.0)/(1000)<<"Kbps");
+    NS_LOG_UNCOND("Simulator Now: " << Simulator::Now().GetSeconds());
+    init_rx = iter->second.rxBytes;
+    break;
+  }
 }
 
 int
 main (int argc, char *argv[])
 {
   //changing default Congestion Control Algo by adding this line:
-  //Config::SetDefault ("ns3::TcpL4Protocol::SocketType", StringValue ("ns3::TcpMyAlgo"));
+  Config::SetDefault ("ns3::TcpL4Protocol::SocketType", StringValue ("ns3::TcpLinuxReno"));
   
   bool useV6 = false;
 
   CommandLine cmd (__FILE__);
   cmd.AddValue ("useIpv6", "Use Ipv6", useV6);
   cmd.Parse (argc, argv);
+
+  //flow mon
+  uint32_t SentPackets = 0;
+  uint32_t ReceivedPackets = 0;
+  uint32_t LostPackets = 0;
+
 
   NodeContainer nodes;
   nodes.Create (2);
@@ -276,6 +311,10 @@ main (int argc, char *argv[])
   Ptr<PcapFileWrapper> file = pcapHelper.CreateFile ("seventh.pcap", std::ios::out, PcapHelper::DLT_PPP);
   devices.Get (1)->TraceConnectWithoutContext ("PhyRxDrop", MakeBoundCallback (&RxDrop, file));
 
+  //Flow mon declaration
+  monitor = flowmon.InstallAll();
+
+
   // Use GnuplotHelper to plot the packet byte count over time
   GnuplotHelper plotHelper;
 
@@ -313,8 +352,39 @@ main (int argc, char *argv[])
                          tracePath,
                          "OutputBytes");
 
+
+
+  Simulator::Schedule(Seconds(1), &ShowTput);
+  Simulator::Schedule(Seconds(2), &ShowTput);  
+  Simulator::Schedule(Seconds(3), &ShowTput);
+  Simulator::Schedule(Seconds(4), &ShowTput);
+
+  Simulator::Schedule(Seconds(5), &ShowTput);
+  Simulator::Schedule(Seconds(6), &ShowTput);  
+  Simulator::Schedule(Seconds(7), &ShowTput);
+  Simulator::Schedule(Seconds(8), &ShowTput);
+  
+  Simulator::Schedule(Seconds(9), &ShowTput);
+  Simulator::Schedule(Seconds(10), &ShowTput);  
+  Simulator::Schedule(Seconds(11), &ShowTput);
+  Simulator::Schedule(Seconds(12), &ShowTput);
+
+  Simulator::Schedule(Seconds(13), &ShowTput);
+  Simulator::Schedule(Seconds(14), &ShowTput);  
+  Simulator::Schedule(Seconds(15), &ShowTput);
+  Simulator::Schedule(Seconds(16), &ShowTput);
+  
+  Simulator::Schedule(Seconds(17), &ShowTput);
+  Simulator::Schedule(Seconds(18), &ShowTput);  
+  Simulator::Schedule(Seconds(19), &ShowTput);
+  Simulator::Schedule(Seconds(20), &ShowTput);  
+
   Simulator::Stop (Seconds (20));
   Simulator::Run ();
+
+  //flow mon calc
+
+  
   Simulator::Destroy ();
 
   return 0;
