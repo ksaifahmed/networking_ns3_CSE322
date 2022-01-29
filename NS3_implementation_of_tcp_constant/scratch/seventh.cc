@@ -64,6 +64,17 @@ NS_LOG_COMPONENT_DEFINE ("SeventhScriptExample");
 // in src/stats/docs/seventh-packet-byte-count.png
 // ===========================================================================
 //
+
+//Some Globals for Throughput Calculation ==================================
+FlowMonitorHelper flowmon;
+Ptr<FlowMonitor> monitor;
+uint64_t previous_rx = 0; //initial bytes received
+std::map<FlowId, FlowMonitor::FlowStats> stats;
+bool first = false, first_pos = false;
+double t_put = 0.0, temp = 0.0;
+//===========================================================================
+
+
 class MyApp : public Application
 {
 public:
@@ -191,7 +202,20 @@ static void
 CwndChange (Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
 {
   //NS_LOG_UNCOND (Simulator::Now ().GetSeconds () << "\t" << newCwnd);
-  *stream->GetStream () << Simulator::Now ().GetSeconds () << "\t" << oldCwnd << "\t" << newCwnd << std::endl;
+  stats = monitor->GetFlowStats();
+  for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator iter = stats.begin (); iter != stats.end (); ++iter)
+  {
+    t_put = (abs(iter->second.rxBytes - previous_rx) * 8.0) / 1000.0;
+
+    //constant graph condition
+    // if(t_put > 0.1) temp = t_put;
+    // else t_put = temp;
+
+    NS_LOG_UNCOND("Throughput =" << t_put <<" Kbps, time: " << Simulator::Now().GetSeconds());
+    previous_rx = iter->second.rxBytes;
+    break;
+  }
+  *stream->GetStream () << Simulator::Now ().GetSeconds () << "\t" << oldCwnd << "\t" << t_put << std::endl;
 }
 
 static void
@@ -202,32 +226,22 @@ RxDrop (Ptr<PcapFileWrapper> file, Ptr<const Packet> p)
 }
 
 
-void loop_delay()
-{
-  double d = 0.2323;
-  for(int i=0; i < 10000000; i++)
-  {
-    d += d * 24.34;
-  }
-}
+// void ShowTput()
+// {
+//   stats = monitor->GetFlowStats();
+//   for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator iter = stats.begin (); iter != stats.end (); ++iter)
+//   {
+//     t_put = (abs(iter->second.rxBytes - previous_rx) * 8.0) / 1000.0;
 
-FlowMonitorHelper flowmon;
-Ptr<FlowMonitor> monitor;
-uint64_t init_rx = 0; //initial bytes received
+//     //constant graph condition
+//     if(t_put > 0.1) temp = t_put;
+//     else t_put = temp;
 
-void ShowTput()
-{
-  Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowmon.GetClassifier ());
-  std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats();
-  
-  for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator iter = stats.begin (); iter != stats.end (); ++iter)
-  {
-    NS_LOG_UNCOND("Throughput =" <<(abs(iter->second.rxBytes - init_rx) * 8.0)/(1000)<<"Kbps");
-    NS_LOG_UNCOND("Simulator Now: " << Simulator::Now().GetSeconds());
-    init_rx = iter->second.rxBytes;
-    break;
-  }
-}
+//     NS_LOG_UNCOND("Throughput =" << t_put <<" Kbps, time: " << Simulator::Now().GetSeconds());
+//     previous_rx = iter->second.rxBytes;
+//     break;
+//   }
+// }
 
 int
 main (int argc, char *argv[])
@@ -304,7 +318,7 @@ main (int argc, char *argv[])
   app->SetStopTime (Seconds (20.));
 
   AsciiTraceHelper asciiTraceHelper;
-  Ptr<OutputStreamWrapper> stream = asciiTraceHelper.CreateFileStream ("seventh.cwnd");
+  Ptr<OutputStreamWrapper> stream = asciiTraceHelper.CreateFileStream ("reno.cwnd");
   ns3TcpSocket->TraceConnectWithoutContext ("CongestionWindow", MakeBoundCallback (&CwndChange, stream));
 
   PcapHelper pcapHelper;
@@ -353,31 +367,11 @@ main (int argc, char *argv[])
                          "OutputBytes");
 
 
-
-  Simulator::Schedule(Seconds(1), &ShowTput);
-  Simulator::Schedule(Seconds(2), &ShowTput);  
-  Simulator::Schedule(Seconds(3), &ShowTput);
-  Simulator::Schedule(Seconds(4), &ShowTput);
-
-  Simulator::Schedule(Seconds(5), &ShowTput);
-  Simulator::Schedule(Seconds(6), &ShowTput);  
-  Simulator::Schedule(Seconds(7), &ShowTput);
-  Simulator::Schedule(Seconds(8), &ShowTput);
-  
-  Simulator::Schedule(Seconds(9), &ShowTput);
-  Simulator::Schedule(Seconds(10), &ShowTput);  
-  Simulator::Schedule(Seconds(11), &ShowTput);
-  Simulator::Schedule(Seconds(12), &ShowTput);
-
-  Simulator::Schedule(Seconds(13), &ShowTput);
-  Simulator::Schedule(Seconds(14), &ShowTput);  
-  Simulator::Schedule(Seconds(15), &ShowTput);
-  Simulator::Schedule(Seconds(16), &ShowTput);
-  
-  Simulator::Schedule(Seconds(17), &ShowTput);
-  Simulator::Schedule(Seconds(18), &ShowTput);  
-  Simulator::Schedule(Seconds(19), &ShowTput);
-  Simulator::Schedule(Seconds(20), &ShowTput);  
+  //Simulator::Schedule(Seconds(1), &init_put);  
+  // for(int i=100; i<2000; i++)
+  // {
+  //   Simulator::Schedule(MilliSeconds(i), &ShowTput);  
+  // }
 
   Simulator::Stop (Seconds (20));
   Simulator::Run ();
