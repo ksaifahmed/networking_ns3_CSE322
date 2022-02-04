@@ -23,15 +23,19 @@
 /*
 WiFi 802.11 Dumbell Network with Two Wired P2P Routers, Wireless Senders, Wired Receivers:
 		 _                               _
-        |   H0--*           +------H5    |
-        |			        |			 |		
-		|	H1--*   		+------H6	 |
-		|					|			 |
-Senders	|	H2--*   R1------R2-----H7	 |	Receivers
-(Apps)	|					|			 |  (Sinks)
-		|	H3--*   		+------H8  	 |
-        |                   |            |
-        |_  H4--*           +------H9   _|
+        |   H0------+           *---H5   |
+        |			|       			 |		
+		|	H1------+		    *---H6 	 |
+		|			|					 |
+Senders	|	H2------R1------R2  *---H7   |	Receivers
+(Apps)	|			|		 			 |  (Sinks)
+		|	H3------+		    *---H8   |
+        |           |                    |
+        |_  H4------+           *---H9  _|
+
+        ===============IP Addresses============= 
+        10.1.3.0 to | --- 10.1.1.0 ----| 10.1.2.0     
+        10..1.7.0   |                  |
 
 */
 #include <string>
@@ -183,7 +187,7 @@ void App::ScheduleTx(void)
 }
 
 static void
-CwndChange(Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
+CwndChanges(Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
 {
     //NS_LOG_UNCOND (Simulator::Now ().GetSeconds () << "\t" << newCwnd);
     stats = monitor->GetFlowStats();
@@ -195,6 +199,13 @@ CwndChange(Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
         break;
     }
     *stream->GetStream() << Simulator::Now().GetSeconds() << "\t" << oldCwnd << "\t" << t_put << std::endl;
+}
+
+static void
+CwndChange (Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
+{
+  NS_LOG_UNCOND (Simulator::Now ().GetSeconds () << "\t" << newCwnd);
+  *stream->GetStream () << Simulator::Now ().GetSeconds () << "\t" << oldCwnd << "\t" << newCwnd << std::endl;
 }
 
 static void
@@ -350,21 +361,24 @@ int main(int argc, char **argv)
 
 
     //================app set up===================
-    UdpEchoServerHelper echoServer(9);
+	uint port = 9000;
+	uint numPackets = 100000;
+    uint packetSize = 1024;
+	std::string transferSpeed = "5Mbps";
 
-    ApplicationContainer serverApps = echoServer.Install(wifiStaNodesR.Get(nWifi-1));
-    serverApps.Start(Seconds(1.0));
-    serverApps.Stop(Seconds(10.0));
+    double sinkStart = 0;
+    double appStart = 1;
+    double stopTime = 10;
 
-    UdpEchoClientHelper echoClient(right_wireless_interfaces.GetAddress(nWifi-1), 9);
-    echoClient.SetAttribute("MaxPackets", UintegerValue(1));
-    echoClient.SetAttribute("Interval", TimeValue(Seconds(1.0)));
-    echoClient.SetAttribute("PacketSize", UintegerValue(1024));
-
-    ApplicationContainer clientApps =
-        echoClient.Install(WiredNodes_Left.Get(nWifi - 2));
-    clientApps.Start(Seconds(2.0));
-    clientApps.Stop(Seconds(10.0));
+    AsciiTraceHelper asciiTraceHelper;
+	Ptr<OutputStreamWrapper> stream_cwnd = asciiTraceHelper.CreateFileStream("baseline_paper.cwnd");
+    Ptr<Socket> ns3TcpSocket1 = setFlow(InetSocketAddress(right_wireless_interfaces.GetAddress(0), port), port,
+                                        WiredNodes_Left.Get(1), wifiStaNodesR.Get(0), 
+                                        sinkStart, stopTime, 
+                                        packetSize, numPackets, transferSpeed, 
+                                        appStart, stopTime);
+                                       
+    ns3TcpSocket1->TraceConnectWithoutContext("CongestionWindow", MakeBoundCallback (&CwndChange, stream_cwnd));
     //===================================================
 
 
