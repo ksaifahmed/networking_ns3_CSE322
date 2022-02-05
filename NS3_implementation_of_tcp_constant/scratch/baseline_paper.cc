@@ -187,25 +187,31 @@ void App::ScheduleTx(void)
 }
 
 static void
-CwndChanges(Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
+CwndChange (Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
 {
     //NS_LOG_UNCOND (Simulator::Now ().GetSeconds () << "\t" << newCwnd);
     stats = monitor->GetFlowStats();
+    Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowmon.GetClassifier ());
     for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator iter = stats.begin(); iter != stats.end(); ++iter)
     {
+        //Tput of a specific node
+        Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow (iter->first);
+        if(t.sourceAddress != "10.1.7.2") continue;
+
+        //calculate Kilobits per second
         t_put = (abs(iter->second.rxBytes - previous_rx) * 8.0) / 1000.0;
-        NS_LOG_UNCOND("Throughput =" << t_put << " Kbps, time: " << Simulator::Now().GetSeconds());
+
+        //don't print the small values
+        if(t_put < 0.01) break;
+
+        //print time, tput and cwnd
+        NS_LOG_UNCOND("Time: "<< Simulator::Now().GetSeconds() << ", Tput: " << t_put << ", cwnd: " << oldCwnd);
         previous_rx = iter->second.rxBytes;
+        *stream->GetStream() << Simulator::Now().GetSeconds() << "\t" << oldCwnd << "\t" << t_put << std::endl;
+
+        //only one node's Tput
         break;
     }
-    *stream->GetStream() << Simulator::Now().GetSeconds() << "\t" << oldCwnd << "\t" << t_put << std::endl;
-}
-
-static void
-CwndChange (Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
-{
-  NS_LOG_UNCOND (Simulator::Now ().GetSeconds () << "\t" << newCwnd);
-  *stream->GetStream () << Simulator::Now ().GetSeconds () << "\t" << oldCwnd << "\t" << newCwnd << std::endl;
 }
 
 static void
@@ -242,7 +248,7 @@ Ptr<Socket> setFlow(Address sinkAddress, uint sinkPort, Ptr<Node> hostNode, Ptr<
 int main(int argc, char **argv)
 {
     //changing default Congestion Control Algo by adding this line:
-    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::TcpLinuxReno"));
+    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::TcpWestwood"));
 
     //NO OF NODES ON EACH SIDE
     uint32_t nWifi = 5;
@@ -298,7 +304,7 @@ int main(int argc, char **argv)
     left_p2_helper.SetChannelAttribute ("Delay", StringValue ("2ms"));
 
     NetDeviceContainer wired_net_devices[nWifi];
-    for(int i = 0; i < nWifi; i++) {
+    for(uint32_t i = 0; i < nWifi; i++) {
         wired_net_devices[i] = left_p2_helper.Install(WiredNodes_Left.Get(0), WiredNodes_Left.Get(i+1));
     }
 
@@ -347,7 +353,7 @@ int main(int argc, char **argv)
     address.Assign(right_apDevices);
 
     address.SetBase("10.1.3.0", "255.255.255.0");
-    for(int i = 0; i < nWifi; i++) {
+    for(uint32_t i = 0; i < nWifi; i++) {
         std::string ip_ = "10.1." + std::to_string(i+3) + ".0";
         ns3::Ipv4Address ip_addr(ip_.c_str());
         address.SetBase(ip_addr, "255.255.255.0");
@@ -358,21 +364,21 @@ int main(int argc, char **argv)
 
     //================app set up===================
 	uint port = 9000;
-	uint numPackets = 1000;
+	uint numPackets = 40000;
     uint packetSize = 1024;
 	std::string transferSpeed = "10Mbps";
 
     double sinkStart = 0;
     double appStart = 1;
-    double stopTime = 20;
+    double stopTime = 50;
 
     //tracing one of the sender flows
     AsciiTraceHelper asciiTraceHelper;
-	Ptr<OutputStreamWrapper> stream_cwnd = asciiTraceHelper.CreateFileStream("baseline_paper.cwnd");
+	Ptr<OutputStreamWrapper> stream_cwnd = asciiTraceHelper.CreateFileStream("baseline_westwood.cwnd");
     Ptr<Socket> ns3TcpSocket;
     
     //init nWifi flows
-    for(int i = 0; i < nWifi; i++)
+    for(uint32_t i = 0; i < nWifi; i++)
     {
         ns3TcpSocket = setFlow(InetSocketAddress(right_wireless_interfaces.GetAddress(i), port), port,
                                 WiredNodes_Left.Get(i+1), wifiStaNodesR.Get(i), 
@@ -403,7 +409,11 @@ int main(int argc, char **argv)
     //==============================================
 
 
-    Simulator::Stop(Seconds(20.0));
+    //=========Flow mon instantiation=============
+    monitor = flowmon.InstallAll();
+
+
+    Simulator::Stop(Seconds(stopTime));
 
     Simulator::Run();
     Simulator::Destroy();
