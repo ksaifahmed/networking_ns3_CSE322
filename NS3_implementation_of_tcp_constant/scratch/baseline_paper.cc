@@ -215,6 +215,7 @@ RxDrop(Ptr<PcapFileWrapper> file, Ptr<const Packet> p)
     file->Write(Simulator::Now(), p);
 }
 
+//=============sets a single flow from a sender to sink=====================================
 Ptr<Socket> setFlow(Address sinkAddress, uint sinkPort, Ptr<Node> hostNode, Ptr<Node> sinkNode,
                     double startTime, double stopTime, uint packetSize, uint numPackets, std::string dataRate,
                     double appStartTime, double appStopTime)
@@ -235,28 +236,23 @@ Ptr<Socket> setFlow(Address sinkAddress, uint sinkPort, Ptr<Node> hostNode, Ptr<
 
     return ns3TcpSocket;
 }
+//=============================================================================================
+
 
 int main(int argc, char **argv)
 {
     //changing default Congestion Control Algo by adding this line:
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::TcpLinuxReno"));
 
-    bool verbose = true;
+    //NO OF NODES ON EACH SIDE
     uint32_t nWifi = 5;
-    bool tracing = false;
-
-    if (verbose)
-    {
-        LogComponentEnable("UdpEchoClientApplication", LOG_LEVEL_INFO);
-        LogComponentEnable("UdpEchoServerApplication", LOG_LEVEL_INFO);
-    }
 
     //=============the middle p2p routers=====================
     NodeContainer p2p_routers;
     p2p_routers.Create(2);
 
     PointToPointHelper pointToPoint;
-    pointToPoint.SetDeviceAttribute("DataRate", StringValue("5Mbps"));
+    pointToPoint.SetDeviceAttribute("DataRate", StringValue("1Mbps"));
     pointToPoint.SetChannelAttribute("Delay", StringValue("2ms"));
 
     NetDeviceContainer p2pDevices;
@@ -298,7 +294,7 @@ int main(int argc, char **argv)
     WiredNodes_Left.Create(nWifi);
 
     PointToPointHelper left_p2_helper;
-    left_p2_helper.SetDeviceAttribute ("DataRate", StringValue ("5Mbps"));
+    left_p2_helper.SetDeviceAttribute ("DataRate", StringValue ("10Mbps"));
     left_p2_helper.SetChannelAttribute ("Delay", StringValue ("2ms"));
 
     NetDeviceContainer wired_net_devices[nWifi];
@@ -362,23 +358,43 @@ int main(int argc, char **argv)
 
     //================app set up===================
 	uint port = 9000;
-	uint numPackets = 100000;
+	uint numPackets = 1000;
     uint packetSize = 1024;
-	std::string transferSpeed = "5Mbps";
+	std::string transferSpeed = "10Mbps";
 
     double sinkStart = 0;
     double appStart = 1;
-    double stopTime = 10;
+    double stopTime = 20;
 
+    //tracing one of the sender flows
     AsciiTraceHelper asciiTraceHelper;
 	Ptr<OutputStreamWrapper> stream_cwnd = asciiTraceHelper.CreateFileStream("baseline_paper.cwnd");
-    Ptr<Socket> ns3TcpSocket1 = setFlow(InetSocketAddress(right_wireless_interfaces.GetAddress(0), port), port,
-                                        WiredNodes_Left.Get(1), wifiStaNodesR.Get(0), 
-                                        sinkStart, stopTime, 
-                                        packetSize, numPackets, transferSpeed, 
-                                        appStart, stopTime);
-                                       
-    ns3TcpSocket1->TraceConnectWithoutContext("CongestionWindow", MakeBoundCallback (&CwndChange, stream_cwnd));
+    Ptr<Socket> ns3TcpSocket;
+    
+    //init nWifi flows
+    for(int i = 0; i < nWifi; i++)
+    {
+        ns3TcpSocket = setFlow(InetSocketAddress(right_wireless_interfaces.GetAddress(i), port), port,
+                                WiredNodes_Left.Get(i+1), wifiStaNodesR.Get(i), 
+                                sinkStart, stopTime, 
+                                packetSize, numPackets, transferSpeed, 
+                                appStart, stopTime);        
+    }
+    //set the last (6th) flow, left_first to right_second -- port 9002
+    setFlow(InetSocketAddress(right_wireless_interfaces.GetAddress(2), port+2), port+2,
+            WiredNodes_Left.Get(1), wifiStaNodesR.Get(2), 
+            sinkStart, stopTime, 
+            packetSize, numPackets, transferSpeed, 
+            appStart, stopTime);
+    
+
+    Ptr<Node> src_node = WiredNodes_Left.Get(5);
+    Ptr<Ipv4> ipv4_ = src_node->GetObject<Ipv4>();
+    Ipv4InterfaceAddress iaddr = ipv4_->GetAddress (1,0);
+    Ipv4Address ipAddr = iaddr.GetLocal ();
+
+    NS_LOG_UNCOND("SRC: " << ipAddr << ", DEST: " << right_wireless_interfaces.GetAddress(4));
+    ns3TcpSocket->TraceConnectWithoutContext("CongestionWindow", MakeBoundCallback (&CwndChange, stream_cwnd));
     //===================================================
 
 
@@ -387,15 +403,7 @@ int main(int argc, char **argv)
     //==============================================
 
 
-    Simulator::Stop(Seconds(10.0));
-
-    if (tracing)
-    {
-        phy_r.SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
-        pointToPoint.EnablePcapAll("third");
-        phy_r.EnablePcap("third", right_apDevices.Get(0));        
-
-    }
+    Simulator::Stop(Seconds(20.0));
 
     Simulator::Run();
     Simulator::Destroy();
