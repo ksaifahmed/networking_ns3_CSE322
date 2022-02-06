@@ -53,6 +53,10 @@ Senders	|	H2------R1------R2  *---H7   |	Receivers
 #include "ns3/csma-module.h"
 #include "ns3/yans-wifi-helper.h"
 #include "ns3/ssid.h"
+#include "ns3/error-rate-model.h"
+#include "ns3/yans-error-rate-model.h"
+#include "ns3/yans-wifi-phy.h"
+
 
 typedef uint32_t uint;
 
@@ -186,6 +190,8 @@ void App::ScheduleTx(void)
     }
 }
 
+
+//calculates instantaneous tput, cwind
 static void
 CwndChange (Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
 {
@@ -212,6 +218,14 @@ CwndChange (Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
         //only one node's Tput
         break;
     }
+}
+
+//OG function
+static void
+CwndChangeOG (Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
+{
+  NS_LOG_UNCOND (Simulator::Now ().GetSeconds () << "\t" << newCwnd);
+  *stream->GetStream () << Simulator::Now ().GetSeconds () << "\t" << oldCwnd << "\t" << newCwnd << std::endl;
 }
 
 static void
@@ -244,14 +258,27 @@ Ptr<Socket> setFlow(Address sinkAddress, uint sinkPort, Ptr<Node> hostNode, Ptr<
 }
 //=============================================================================================
 
+//========GLOBAL VARS==========
+
+//NO OF NODES ON EACH SIDE OF DUMBBELL
+uint32_t nWifi = 5;
+
+uint port = 9000;
+uint numPackets = 40000;
+uint packetSize = 1024;
+std::string transferSpeed = "10Mbps"; //App dataRate
+
+double sinkStart = 0;
+double appStart = 1;
+double stopTime = 50;
+double ErrorRate = 0.0005;
+//=============================
+
 
 int main(int argc, char **argv)
 {
     //changing default Congestion Control Algo by adding this line:
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::TcpWestwood"));
-
-    //NO OF NODES ON EACH SIDE
-    uint32_t nWifi = 5;
 
     //=============the middle p2p routers=====================
     NodeContainer p2p_routers;
@@ -265,6 +292,7 @@ int main(int argc, char **argv)
     p2pDevices = pointToPoint.Install(p2p_routers);
     //=============================================
 
+
     //==============Wireless nodes on the RIGHT net====================
     NodeContainer wifiStaNodesR;
     wifiStaNodesR.Create(nWifi);
@@ -272,7 +300,8 @@ int main(int argc, char **argv)
 
     YansWifiChannelHelper right_channel = YansWifiChannelHelper::Default();
     YansWifiPhyHelper phy_r;
-    phy_r.SetChannel(right_channel.Create());
+    Ptr<YansWifiChannel> channel = right_channel.Create();
+    phy_r.SetChannel(channel);
 
     WifiHelper wifi_r;
     wifi_r.SetRemoteStationManager("ns3::AarfWifiManager");
@@ -291,6 +320,22 @@ int main(int argc, char **argv)
 
     NetDeviceContainer right_apDevices;
     right_apDevices = wifi_r.Install(phy_r, mac_r, wifiApNodeR);
+
+    //=========================ADDED ERROR RATE ON WIFI SUBNET!!!========================
+    Ptr<RateErrorModel> em = CreateObject<RateErrorModel> ();
+    em->SetAttribute ("ErrorRate", DoubleValue (ErrorRate));
+    
+    //get global node index
+    // for(uint32_t i = 0; i < nWifi; i++)
+    // {
+    //     NS_LOG_UNCOND("\tid = " << wifiStaNodesR.Get(i)->GetId());
+    // }
+
+    Config::Set("/NodeList/2/DeviceList/0/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PostReceptionErrorModel", PointerValue(em));
+    Config::Set("/NodeList/3/DeviceList/0/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PostReceptionErrorModel", PointerValue(em));
+    Config::Set("/NodeList/4/DeviceList/0/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PostReceptionErrorModel", PointerValue(em));    
+    Config::Set("/NodeList/5/DeviceList/0/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PostReceptionErrorModel", PointerValue(em));
+    Config::Set("/NodeList/6/DeviceList/0/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PostReceptionErrorModel", PointerValue(em));
     //==================================================================
 
 
@@ -363,14 +408,6 @@ int main(int argc, char **argv)
 
 
     //================app set up===================
-	uint port = 9000;
-	uint numPackets = 40000;
-    uint packetSize = 1024;
-	std::string transferSpeed = "10Mbps";
-
-    double sinkStart = 0;
-    double appStart = 1;
-    double stopTime = 50;
 
     //tracing one of the sender flows
     AsciiTraceHelper asciiTraceHelper;
