@@ -62,7 +62,6 @@ typedef uint32_t uint;
 
 using namespace ns3;
 
-#define ERROR 0.000001
 
 //Some Globals for Throughput Calculation ==================================
 FlowMonitorHelper flowmon;
