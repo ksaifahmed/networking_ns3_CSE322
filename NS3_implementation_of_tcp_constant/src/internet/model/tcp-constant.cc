@@ -1,60 +1,36 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2019 NITK Surathkal
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation;
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- *
- * Author: Apoorva Bhargava <apoorvabhargava13@gmail.com>
- *         Mohit P. Tahiliani <tahiliani@nitk.edu.in>
- *
- */
-
 #include "tcp-constant.h"
 #include "ns3/log.h"
 #include "ns3/simulator.h"
+#include "rtt-estimator.h"
+#include "tcp-socket-base.h"
+
+NS_LOG_COMPONENT_DEFINE ("TcpConstant");
 
 namespace ns3 {
 
-NS_LOG_COMPONENT_DEFINE ("TcpConstant");
 NS_OBJECT_ENSURE_REGISTERED (TcpConstant);
 
-TypeId
-TcpConstant::GetTypeId (void)
-{
-  static TypeId tid = TypeId ("ns3::TcpConstant")
-    .SetParent<TcpCongestionOps> ()
-    .SetGroupName ("Internet")
-    .AddConstructor<TcpConstant> ()
-    .AddTraceSource("EstimatedBW", "The estimated bandwidth",
-            MakeTraceSourceAccessor(&TcpConstant::m_currentBW),
-            "ns3::TracedValueCallback::Double")
-  ;
-  return tid;
-}
-
+//======================Public Functions======================================
 TcpConstant::TcpConstant (void) :
-  TcpCongestionOps (),
+  TcpNewReno (),
   m_currentBW (0),
-  m_ackedSegments (0)
+  m_lastSampleBW (0),
+  m_lastBW (0),
+  m_ackedSegments (0),
+  m_IsCount (false),
+  m_lastAck (0)
 {
   NS_LOG_FUNCTION (this);
 }
 
-TcpConstant::TcpConstant (const TcpConstant& sock):
-  TcpCongestionOps (sock),
-  m_currentBW(sock.m_currentBW),
-  m_ackedSegments(sock.m_ackedSegments)
+TcpConstant::TcpConstant (const TcpConstant& sock) :
+  TcpNewReno (sock),
+  m_currentBW (sock.m_currentBW),
+  m_lastSampleBW (sock.m_lastSampleBW),
+  m_lastBW (sock.m_lastBW),
+  m_pType (sock.m_pType),
+  m_fType (sock.m_fType),
+  m_IsCount (sock.m_IsCount)
 {
   NS_LOG_FUNCTION (this);
   NS_LOG_LOGIC ("Invoked the copy constructor");
@@ -64,6 +40,170 @@ TcpConstant::~TcpConstant (void)
 {
 }
 
+TypeId
+TcpConstant::GetTypeId (void)
+{
+  static TypeId tid = TypeId("ns3::TcpConstant")
+    .SetParent<TcpNewReno>()
+    .SetGroupName ("Internet")
+    .AddConstructor<TcpConstant>()
+    .AddAttribute("FilterType", "Use this to choose no filter or Tustin's approximation filter",
+                  EnumValue(TcpConstant::TUSTIN), MakeEnumAccessor(&TcpConstant::m_fType),
+                  MakeEnumChecker(TcpConstant::NONE, "None", TcpConstant::TUSTIN, "Tustin"))
+    .AddAttribute("ProtocolType", "Use this to let the code run as Westwood or WestwoodPlus",
+                  EnumValue(TcpConstant::WESTWOOD),
+                  MakeEnumAccessor(&TcpConstant::m_pType),
+                  MakeEnumChecker(TcpConstant::WESTWOOD, "Westwood",TcpConstant::WESTWOODPLUS, "WestwoodPlus"))
+    .AddTraceSource("EstimatedBW", "The estimated bandwidth",
+                    MakeTraceSourceAccessor(&TcpConstant::m_currentBW),
+                    "ns3::TracedValueCallback::Double")
+  ;
+  return tid;
+}
+
+//from Reno
+std::string
+TcpConstant::GetName () const
+{
+  return "TcpConstant";
+}
+
+//from Reno
+void
+TcpConstant::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
+{
+  NS_LOG_FUNCTION (this << tcb << segmentsAcked);
+
+  // Linux tcp_in_slow_start() condition
+  if (tcb->m_cWnd < tcb->m_ssThresh)
+    {
+      NS_LOG_DEBUG ("In slow start, m_cWnd " << tcb->m_cWnd << " m_ssThresh " << tcb->m_ssThresh);
+      segmentsAcked = SlowStart (tcb, segmentsAcked);
+    }
+  else
+    {
+      NS_LOG_DEBUG ("In cong. avoidance, m_cWnd " << tcb->m_cWnd << " m_ssThresh " << tcb->m_ssThresh);
+      CongestionAvoidance (tcb, segmentsAcked);
+    }
+}
+
+
+//from reno
+uint32_t
+TcpConstant::GetSsThresh (Ptr<const TcpSocketState> tcb,
+                          uint32_t bytesInFlight)
+{
+  NS_LOG_FUNCTION (this << tcb << bytesInFlight);
+
+  // In Linux, it is written as:  return max(tp->snd_cwnd >> 1U, 2U);
+  return std::max<uint32_t> (2 * tcb->m_segmentSize, tcb->m_cWnd / 2);
+}
+
+
+Ptr<TcpCongestionOps>
+TcpConstant::Fork ()
+{
+  return CreateObject<TcpConstant> (*this);
+}
+
+
+
+//from WW
+void
+TcpConstant::PktsAcked (Ptr<TcpSocketState> tcb, uint32_t packetsAcked,
+                        const Time& rtt)
+{
+  NS_LOG_FUNCTION (this << tcb << packetsAcked << rtt);
+
+  if (rtt.IsZero ())
+    {
+      NS_LOG_WARN ("RTT measured is zero!");
+      return;
+    }
+
+  m_ackedSegments += packetsAcked;
+
+  if (m_pType == TcpConstant::WESTWOOD)
+    {
+      EstimateBW (rtt, tcb);
+    }
+  else if (m_pType == TcpConstant::WESTWOODPLUS)
+    {
+      if (!(rtt.IsZero () || m_IsCount))
+        {
+          m_IsCount = true;
+          m_bwEstimateEvent.Cancel ();
+          m_bwEstimateEvent = Simulator::Schedule (rtt, &TcpConstant::EstimateBW,
+                                                   this, rtt, tcb);
+        }
+    }
+}
+//===================================END OF PUBLIC======================================
+
+
+
+
+
+
+//==========================PRIVATE FUNCTIONS================================
+//from WW
+void
+TcpConstant::EstimateBW (const Time &rtt, Ptr<TcpSocketState> tcb)
+{
+  NS_LOG_FUNCTION (this);
+
+  NS_ASSERT (!rtt.IsZero ());
+
+  m_currentBW = m_ackedSegments * tcb->m_segmentSize / rtt.GetSeconds ();
+
+  if (m_pType == TcpConstant::WESTWOOD)
+    {
+      Time currentAck = Simulator::Now ();
+      m_currentBW = m_ackedSegments * tcb->m_segmentSize / (currentAck - m_lastAck).GetSeconds ();
+      m_lastAck = currentAck;
+    }
+  else if (m_pType == TcpConstant::WESTWOODPLUS)
+    {
+      m_currentBW = m_ackedSegments * tcb->m_segmentSize / rtt.GetSeconds ();
+      m_IsCount = false;
+    }
+
+  m_ackedSegments = 0;
+  NS_LOG_LOGIC ("Estimated BW: " << m_currentBW);
+
+  // Filter the BW sample
+
+  double alpha = 0.9;
+
+  if (m_fType == TcpConstant::NONE)
+    {
+    }
+  else if (m_fType == TcpConstant::TUSTIN)
+    {
+      double sample_bwe = m_currentBW;
+      m_currentBW = (alpha * m_lastBW) + ((1 - alpha) * ((sample_bwe + m_lastSampleBW) / 2));
+      m_lastSampleBW = sample_bwe;
+      m_lastBW = m_currentBW;
+    }
+
+  NS_LOG_LOGIC ("Estimated BW after filtering: " << m_currentBW);
+}
+
+//==========================END OF PRIVATE================================
+
+
+
+
+
+
+
+
+
+
+
+
+//=========================PROTECTED FUNCTIONS============================
+//from Reno
 uint32_t
 TcpConstant::SlowStart (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
 {
@@ -80,42 +220,8 @@ TcpConstant::SlowStart (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
   return 0;
 }
 
-void
-TcpConstant::EstimateBW (const Time &rtt, Ptr<TcpSocketState> tcb)
-{
-  NS_LOG_FUNCTION (this);
 
-  NS_ASSERT (!rtt.IsZero ());
-
-  m_currentBW = m_ackedSegments * tcb->m_segmentSize / rtt.GetSeconds ();
-
-
-  // Time currentAck = Simulator::Now ();
-  // m_currentBW = m_ackedSegments * tcb->m_segmentSize / (currentAck - m_lastAck).GetSeconds ();
-  // m_lastAck = currentAck;
-
-  m_ackedSegments = 0;
-  NS_LOG_LOGIC ("Estimated BW: " << m_currentBW);
-
-  // Filter the BW sample not needed
-  NS_LOG_LOGIC ("Estimated BW after filtering: " << m_currentBW);
-}
-
-void
-TcpConstant::PktsAcked (Ptr<TcpSocketState> tcb, uint32_t packetsAcked, const Time& rtt)
-{
-  NS_LOG_FUNCTION (this << tcb << packetsAcked << rtt);
-
-  if (rtt.IsZero ())
-    {
-      NS_LOG_WARN ("RTT measured is zero!");
-      return;
-    }
-
-  m_ackedSegments += packetsAcked;
-  EstimateBW(rtt, tcb);
-}
-
+//from Reno
 void
 TcpConstant::CongestionAvoidance (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
 {
@@ -149,46 +255,7 @@ TcpConstant::CongestionAvoidance (Ptr<TcpSocketState> tcb, uint32_t segmentsAcke
     }
   NS_LOG_DEBUG ("At end of CongestionAvoidance(), m_cWnd: " << tcb->m_cWnd << " m_cWndCnt: " << m_cWndCnt);
 }
+//==========================END OF PROTECTED================================
 
-void
-TcpConstant::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
-{
-  NS_LOG_FUNCTION (this << tcb << segmentsAcked);
-
-  // Linux tcp_in_slow_start() condition
-  if (tcb->m_cWnd < tcb->m_ssThresh)
-    {
-      NS_LOG_DEBUG ("In slow start, m_cWnd " << tcb->m_cWnd << " m_ssThresh " << tcb->m_ssThresh);
-      segmentsAcked = SlowStart (tcb, segmentsAcked);
-    }
-  else
-    {
-      NS_LOG_DEBUG ("In cong. avoidance, m_cWnd " << tcb->m_cWnd << " m_ssThresh " << tcb->m_ssThresh);
-      CongestionAvoidance (tcb, segmentsAcked);
-    }
-}
-
-std::string
-TcpConstant::GetName () const
-{
-  return "TcpConstant";
-}
-
-uint32_t
-TcpConstant::GetSsThresh (Ptr<const TcpSocketState> state,
-                           uint32_t bytesInFlight)
-{
-  NS_LOG_FUNCTION (this << state << bytesInFlight);
-
-  // In Linux, it is written as:  return max(tp->snd_cwnd >> 1U, 2U);
-  return std::max<uint32_t> (2 * state->m_segmentSize, state->m_cWnd / 2);
-}
-
-Ptr<TcpCongestionOps>
-TcpConstant::Fork ()
-{
-  return CopyObject<TcpConstant> (this);
-}
 
 } // namespace ns3
-
