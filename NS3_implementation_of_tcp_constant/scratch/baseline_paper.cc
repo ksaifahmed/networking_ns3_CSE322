@@ -67,6 +67,7 @@ using namespace ns3;
 FlowMonitorHelper flowmon;
 Ptr<FlowMonitor> monitor;
 uint64_t previous_rx = 0; //initial bytes received
+double prev_time = 0.0;
 std::map<FlowId, FlowMonitor::FlowStats> stats;
 bool first = false, first_pos = false;
 double t_put = 0.0, temp = 0.0;
@@ -191,11 +192,13 @@ void App::ScheduleTx(void)
 
 
 //calculates instantaneous tput, cwind
+double tputadada = 0.0;
 static void
 CwndChange (Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
 {
     //NS_LOG_UNCOND (Simulator::Now ().GetSeconds () << "\t" << newCwnd);
     stats = monitor->GetFlowStats();
+    double time = 0.0;
     Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowmon.GetClassifier ());
     for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator iter = stats.begin(); iter != stats.end(); ++iter)
     {
@@ -203,8 +206,13 @@ CwndChange (Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
         Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow (iter->first);
         if(t.sourceAddress != "10.1.7.2") continue;
 
+        ///////
+        tputadada += iter->second.rxBytes;
+
         //calculate Kilobits per second
-        t_put = (abs(iter->second.rxBytes - previous_rx) * 8.0) / 1000.0;
+        time = (Simulator::Now().GetSeconds() - prev_time);
+        if(!time) continue;
+        t_put = (abs(iter->second.rxBytes - previous_rx) * 8.0) / (1000.0 * time);
 
         //don't print the small values
         if(t_put < 0.01) break;
@@ -212,6 +220,7 @@ CwndChange (Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
         //print time, tput and cwnd
         NS_LOG_UNCOND("Time: "<< Simulator::Now().GetSeconds() << ", Tput: " << t_put << ", cwnd: " << oldCwnd);
         previous_rx = iter->second.rxBytes;
+        prev_time = Simulator::Now().GetSeconds();
         *stream->GetStream() << Simulator::Now().GetSeconds() << "\t" << oldCwnd << "\t" << t_put << std::endl;
 
         //only one node's Tput
@@ -219,10 +228,12 @@ CwndChange (Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
     }
 }
 
+uint32_t mod_id = 0;
 //OG function
 static void
 CwndChangeOG (Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
 {
+  mod_id++; if(mod_id%3==0) return;  
   NS_LOG_UNCOND (Simulator::Now ().GetSeconds () << "\t" << newCwnd);
   *stream->GetStream () << Simulator::Now ().GetSeconds () << "\t" << oldCwnd << "\t" << newCwnd << std::endl;
 }
@@ -277,7 +288,7 @@ double ErrorRate = 0.0005;
 int main(int argc, char **argv)
 {
     //changing default Congestion Control Algo by adding this line:
-    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::TcpWestwood"));
+    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::TcpConstant"));
 
     //=============the middle p2p routers=====================
     NodeContainer p2p_routers;
@@ -410,7 +421,7 @@ int main(int argc, char **argv)
 
     //tracing one of the sender flows
     AsciiTraceHelper asciiTraceHelper;
-	Ptr<OutputStreamWrapper> stream_cwnd = asciiTraceHelper.CreateFileStream("baseline_westwood.cwnd");
+	Ptr<OutputStreamWrapper> stream_cwnd = asciiTraceHelper.CreateFileStream("taskb_con_instant_tput.cwnd");
     Ptr<Socket> ns3TcpSocket;
     
     //init nWifi flows

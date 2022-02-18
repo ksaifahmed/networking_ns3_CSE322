@@ -19,7 +19,7 @@ class EventId;
 class TcpConstant : public TcpNewReno
 {
 public:
-
+  void tunables_init();
   TcpConstant (void);
   TcpConstant (const TcpConstant& sock);
   virtual ~TcpConstant (void);
@@ -95,6 +95,12 @@ protected:
   EventId                m_bwEstimateEvent;        //!< The BW estimation event for Westwood+
   Time                   m_lastAck;                //!< The last ACK time
 
+
+  //=================TCP CONSTANT======================
+  
+  uint32_t k_rounds;
+  double beta;
+  TracedValue<Time> prev_rtt {Seconds(0.0)}; //rtt_archive  
 };
 
 } // namespace ns3

@@ -11,6 +11,12 @@ namespace ns3 {
 NS_OBJECT_ENSURE_REGISTERED (TcpConstant);
 
 //======================Public Functions======================================
+void TcpConstant::tunables_init()
+{
+  beta = 0.015;
+  k_rounds = 20;
+}
+
 TcpConstant::TcpConstant (void) :
   TcpNewReno (),
   m_currentBW (0),
@@ -21,6 +27,7 @@ TcpConstant::TcpConstant (void) :
   m_lastAck (0)
 {
   NS_LOG_FUNCTION (this);
+  tunables_init();
 }
 
 TcpConstant::TcpConstant (const TcpConstant& sock) :
@@ -30,7 +37,9 @@ TcpConstant::TcpConstant (const TcpConstant& sock) :
   m_lastBW (sock.m_lastBW),
   m_pType (sock.m_pType),
   m_fType (sock.m_fType),
-  m_IsCount (sock.m_IsCount)
+  m_IsCount (sock.m_IsCount),
+  k_rounds (sock.k_rounds),
+  beta (sock.beta)
 {
   NS_LOG_FUNCTION (this);
   NS_LOG_LOGIC ("Invoked the copy constructor");
@@ -75,10 +84,15 @@ TcpConstant::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
   NS_LOG_FUNCTION (this << tcb << segmentsAcked);
 
   // Linux tcp_in_slow_start() condition
-  if (tcb->m_cWnd < tcb->m_ssThresh)
+  if (tcb->m_cWnd < tcb->m_ssThresh && k_rounds > 0)
     {
       NS_LOG_DEBUG ("In slow start, m_cWnd " << tcb->m_cWnd << " m_ssThresh " << tcb->m_ssThresh);
       segmentsAcked = SlowStart (tcb, segmentsAcked);
+
+      //tcp-constant: store rtt_archive
+      prev_rtt = tcb->m_lastRtt; 
+      NS_LOG_UNCOND("rtt: " << prev_rtt << ", bw: " << m_currentBW << ", k: "<<k_rounds);
+      k_rounds--;
     }
   else
     {
@@ -208,7 +222,6 @@ uint32_t
 TcpConstant::SlowStart (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
 {
   NS_LOG_FUNCTION (this << tcb << segmentsAcked);
-
   if (segmentsAcked >= 1)
     {
       uint32_t sndCwnd = tcb->m_cWnd;
@@ -227,33 +240,30 @@ TcpConstant::CongestionAvoidance (Ptr<TcpSocketState> tcb, uint32_t segmentsAcke
 {
   NS_LOG_FUNCTION (this << tcb << segmentsAcked);
 
-  uint32_t w = tcb->m_cWnd / tcb->m_segmentSize;
+  //tcp-constant: new rtt (rtt_var)
+  TracedValue<Time> new_rtt = tcb->m_lastRtt;
 
-  // Floor w to 1 if w == 0 
-  if (w == 0)
-    {
-      w = 1;
-    }
+  //tcp-constant: rtt difference ratio
+  double prev_rtime = prev_rtt.Get().GetDouble();
+  double new_rtime = new_rtt.Get().GetDouble();
+  double del_rtime;
+  if(prev_rtime > new_rtime) del_rtime = prev_rtime - new_rtime;
+  else del_rtime = new_rtime - prev_rtime;
+  del_rtime = del_rtime / prev_rtime;
 
-  NS_LOG_DEBUG ("w in segments " << w << " m_cWndCnt " << m_cWndCnt << " segments acked " << segmentsAcked);
-  if (m_cWndCnt >= w)
-    {
-      m_cWndCnt = 0;
-      tcb->m_cWnd += tcb->m_segmentSize;
-      NS_LOG_DEBUG ("Adding 1 segment to m_cWnd");
-    }
+  TracedValue<Time> cwnd_;
+  if(del_rtime > beta){
+    //NS_LOG_UNCOND("recalculating cwnd, del_rtt: " << del_rtime << ", prtt: " << prev_rtt << ", nrtt: " << new_rtt << ", beta: " <<beta);
+    cwnd_ = (m_currentBW/100000.0) * tcb->m_minRtt / tcb->m_segmentSize;
 
-  m_cWndCnt += segmentsAcked;
-  NS_LOG_DEBUG ("Adding 1 segment to m_cWndCnt");
-  if (m_cWndCnt >= w)
-    {
-      uint32_t delta = m_cWndCnt / w;
+    //NS_LOG_UNCOND("bw: " << m_currentBW << ", min_rtt: " << tcb->m_minRtt << ", seg: " << tcb->m_segmentSize);;
 
-      m_cWndCnt -= delta * w;
-      tcb->m_cWnd += delta * tcb->m_segmentSize;
-      NS_LOG_DEBUG ("Subtracting delta * w from m_cWndCnt " << delta * w);
-    }
-  NS_LOG_DEBUG ("At end of CongestionAvoidance(), m_cWnd: " << tcb->m_cWnd << " m_cWndCnt: " << m_cWndCnt);
+    Time temp = cwnd_.Get();
+    tcb->m_cWnd = temp.GetInteger();
+    if(tcb->m_cWnd < 1) tcb->m_cWnd = 1;
+    //NS_LOG_UNCOND("cwnd_trace: " << cwnd_ << ", cwnd: " << temp.GetInteger());
+    prev_rtt = new_rtt;
+  }
 }
 //==========================END OF PROTECTED================================
 
