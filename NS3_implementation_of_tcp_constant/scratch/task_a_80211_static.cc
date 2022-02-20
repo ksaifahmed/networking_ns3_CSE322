@@ -197,6 +197,12 @@ CwndChange (Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
   //*stream->GetStream () << Simulator::Now ().GetSeconds () << "\t" << oldCwnd << "\t" << newCwnd << std::endl;
 }
 
+static void
+RxDrop(Ptr<PcapFileWrapper> file, Ptr<const Packet> p)
+{
+    //NS_LOG_UNCOND ("RxDrop at " << Simulator::Now ().GetSeconds ());
+    file->Write(Simulator::Now(), p);
+}
 
 //=============sets a single flow from a sender to sink=====================================
 Ptr<Socket> setFlow(Address sinkAddress, uint sinkPort, Ptr<Node> hostNode, Ptr<Node> sinkNode,

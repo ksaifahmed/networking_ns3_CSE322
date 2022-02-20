@@ -1,3 +1,15 @@
+/*
+===================================================================================
+ID: 1705110
+TOPOLOGY:
+    2 wired csma Nodes, one of which is Wireless AP
+    The AP Node houses N Wireless Sensor Nodes
+    See Report for Detailed Image and Orientation of Topology Used!
+===================================================================================
+*/
+
+#include <cstdlib>
+#include <map>
 #include <fstream>
 #include "ns3/core-module.h"
 #include "ns3/internet-module.h"
@@ -10,7 +22,7 @@
 #include "ns3/csma-module.h"
 #include "ns3/applications-module.h"
 #include "ns3/ipv6-flow-classifier.h"
-#include "ns3/flow-monitor-helper.h"
+#include "ns3/flow-monitor-module.h"
 #include <ns3/lr-wpan-error-model.h>
 using namespace ns3;
 
@@ -344,8 +356,19 @@ int main(int argc, char **argv)
 
 
     //============Flow Mon init===============
-    FlowMonitorHelper flowHelper;
-    flowHelper.InstallAll();
+    FlowMonitorHelper flowmon;
+    Ptr<FlowMonitor> monitor = flowmon.InstallAll();
+
+    uint32_t SentPackets = 0;
+    uint32_t ReceivedPackets = 0;
+    uint32_t LostPackets = 0;
+
+    int j=0;
+    double AvgThroughput = 0.0;
+    double packet_loss_ratio = 0.0;
+    double packet_delivery_ratio = 0.0;
+    Time Jitter;
+    Time Delay;
 
 
     //============Simulator init====================
@@ -353,16 +376,54 @@ int main(int argc, char **argv)
     Simulator::Run();
 
 
-    //==============Flow Monitor Calculations=============================
+    //=============Metric Calculation=========
+    Ptr<Ipv6FlowClassifier> classifier = DynamicCast<Ipv6FlowClassifier> (flowmon.GetClassifier6 ());
+    std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats ();
+    for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator iter = stats.begin (); iter != stats.end (); ++iter)
+    {
+        Ipv6FlowClassifier::FiveTuple t = classifier->FindFlow (iter->first);
 
+        NS_LOG_UNCOND("----Flow ID:" <<iter->first);
+        NS_LOG_UNCOND("Src Addr" <<t.sourceAddress << "Dst Addr "<< t.destinationAddress);
+        NS_LOG_UNCOND("Sent Packets=" <<iter->second.txPackets);
+        NS_LOG_UNCOND("Received Packets =" <<iter->second.rxPackets);
+        NS_LOG_UNCOND("Lost Packets =" <<iter->second.txPackets-iter->second.rxPackets);
+        packet_delivery_ratio = iter->second.rxPackets*100.0;
+        packet_delivery_ratio /= iter->second.txPackets;
+        NS_LOG_UNCOND("Packet delivery ratio =" << packet_delivery_ratio << "%");
+        packet_loss_ratio = (iter->second.txPackets-iter->second.rxPackets)*100.0;
+        packet_loss_ratio /= iter->second.txPackets;
+        NS_LOG_UNCOND("Packet loss ratio =" << packet_loss_ratio << "%");
+        NS_LOG_UNCOND("Delay =" <<iter->second.delaySum);
+        NS_LOG_UNCOND("Jitter =" <<iter->second.jitterSum);
+        NS_LOG_UNCOND("Throughput =" <<iter->second.rxBytes * 8.0/(iter->second.timeLastRxPacket.GetSeconds()-iter->second.timeFirstTxPacket.GetSeconds())/1024<<"Kbps");
 
+        SentPackets = SentPackets +(iter->second.txPackets);
+        ReceivedPackets = ReceivedPackets + (iter->second.rxPackets);
+        LostPackets = LostPackets + (iter->second.txPackets-iter->second.rxPackets);
+        AvgThroughput = AvgThroughput + (iter->second.rxBytes * 8.0/(iter->second.timeLastRxPacket.GetSeconds()-iter->second.timeFirstTxPacket.GetSeconds())/1024);
+        Delay = Delay + (iter->second.delaySum);
+        Jitter = Jitter + (iter->second.jitterSum);
 
-
-
-
+        j = j + 1;
+    }
+    packet_loss_ratio = ((LostPackets*100.0)/SentPackets);
+    packet_delivery_ratio = ((ReceivedPackets*100.0)/SentPackets);
+    AvgThroughput = AvgThroughput/j;
+    NS_LOG_UNCOND("--------Total Results of the simulation----------"<<std::endl);
+    NS_LOG_UNCOND("Total sent packets  =" << SentPackets);
+    NS_LOG_UNCOND("Total Received Packets =" << ReceivedPackets);
+    NS_LOG_UNCOND("Total Lost Packets =" << LostPackets);
+    NS_LOG_UNCOND("Packet Loss ratio =" << packet_loss_ratio << "%");
+    NS_LOG_UNCOND("Packet delivery ratio =" << packet_delivery_ratio << "%");
+    NS_LOG_UNCOND("Average Throughput =" << AvgThroughput<< "Kbps");
+    NS_LOG_UNCOND("End to End Delay =" << Delay);
+    NS_LOG_UNCOND("End to End Jitter delay =" << Jitter);
+    NS_LOG_UNCOND("Total Flow id " << j);
     //=====================================================================
 
+    
+    
     Simulator::Destroy();
-
     return 0;
 }
