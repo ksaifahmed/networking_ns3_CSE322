@@ -24,6 +24,7 @@ TOPOLOGY:
 #include "ns3/ipv6-flow-classifier.h"
 #include "ns3/flow-monitor-module.h"
 #include <ns3/lr-wpan-error-model.h>
+#include <iostream>
 using namespace ns3;
 
 
@@ -182,9 +183,19 @@ Ptr<Socket> setFlow(Address sinkAddress, uint sinkPort, Ptr<Node> hostNode, Ptr<
 
 //==============GLOBAL VARS=====================
 uint16_t n_wirelessNodes = 2;
-uint32_t n_wireless_nd_ap;
-uint16_t sinkPort = 9;
+uint32_t range = 100;
+uint32_t nFlows = 2; //keep nFlows <= n_wirelessNodes
+uint32_t nPackets_sec = 100;
 
+
+
+uint32_t node_var = 0;
+uint32_t range_var = 0;
+uint32_t flow_var = 0;
+uint32_t packet_var = 0;
+
+
+uint32_t n_wireless_nd_ap;
 uint32_t mtu_bytes = 180;
 uint32_t tcp_adu_size;
 uint64_t data_mbytes = 0;
@@ -193,20 +204,20 @@ double sinkStart = 0;
 double appStart = 1;
 double stopTime = 20;
 
-double start_time = 0;
-double duration = 100.0;
-double stop_time;
 
 bool sack = true;
+uint16_t sinkPort = 9;
 
 std::string recovery = "ns3::TcpClassicRecovery";
 std::string filePrefix;
-Ptr<LrWpanErrorModel> lrWpanError;
 
+uint numPackets = 100000; //TOTAL PACKETS
+uint packetSize = 1024; //in Bytes
+std::string transferSpeed; //App dataRate default
 
-uint numPackets = 200;
-uint packetSize = 1024;
-std::string transferSpeed = "1Mbps"; //App dataRate
+uint32_t del_x = 2;
+uint32_t del_y = 2;
+uint32_t default_ap = 0;
 //===================================================
 
 
@@ -214,41 +225,43 @@ std::string transferSpeed = "1Mbps"; //App dataRate
 
 int main(int argc, char **argv)
 {
+    CommandLine cmd (__FILE__);
+    cmd.AddValue ("nFlows", "no of flows", nFlows);
+    cmd.AddValue ("n_wirelessNodes", "no of nodes", n_wirelessNodes);
+    cmd.AddValue ("nPackets_sec", "no of packets per sec", nPackets_sec);
+    cmd.AddValue ("range", "range of transmission", range);
+
+    cmd.AddValue ("node_var", "enable variable node data to be printed", node_var);
+    cmd.AddValue ("range_var", "enable variable range data to be printed", range_var);
+    cmd.AddValue ("flow_var", "enable variable flow data to be printed", flow_var);
+    cmd.AddValue ("packet_var", "enable variable packet_var data to be printed", packet_var);
+
+    cmd.AddValue ("del_x", "grid_del_x", del_x);
+    cmd.AddValue ("del_y", "grid_del_y", del_y);
+    cmd.AddValue ("default_ap", "If set to 1: AP-->middle wireless node, else the first one", default_ap);
+    
+    cmd.Parse (argc, argv);
+
+
     //===========================CONFIG SETUP=========================================
 
     //changing default Congestion Control Algo by adding this line:
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::TcpWestwood"));
-    Config::SetDefault("ns3::TcpL4Protocol::RecoveryType",
-                       TypeIdValue(TypeId::LookupByName(recovery)));
+    //setting range
+    Config::SetDefault ("ns3::RangePropagationLossModel::MaxRange", DoubleValue (range));
 
 
-    // WHY?
-    //  2 MB of TCP buffer
-    Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(1 << 21));
-    Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(1 << 21));
-    Config::SetDefault("ns3::TcpSocketBase::Sack", BooleanValue(sack));
 
-    // WHAT?
-    Header *temp_header = new Ipv6Header();
-    uint32_t ip_header = temp_header->GetSerializedSize();
-    delete temp_header;
-    temp_header = new TcpHeader();
-    uint32_t tcp_header = temp_header->GetSerializedSize();
-    delete temp_header;
+    // FIXING SEGMENT SIZE, GIVES A LOWER PACKET LOSS
+    // As Done in tcp-variants-comparison.cc
+    Header *header = new Ipv6Header();
+    uint32_t ip_header = header->GetSerializedSize();
+    header = new TcpHeader();
+    uint32_t tcp_header = header->GetSerializedSize();
     tcp_adu_size = mtu_bytes - 20 - (ip_header + tcp_header);
-
     Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(tcp_adu_size));
     //===============================================================
 
-    stop_time = start_time + duration;
-
-    lrWpanError = CreateObject<LrWpanErrorModel>();
-
-    std::cout << "------------------------------------------------------\n";
-    std::cout << "Source Count: " << n_wirelessNodes << "\n";
-    std::cout << "------------------------------------------------------\n";
-
-    Packet::EnablePrinting();
 
 
     //=========making the Nodes====================================
@@ -258,7 +271,9 @@ int main(int argc, char **argv)
 
     NodeContainer wiredNodes;
     wiredNodes.Create(1);
-    wiredNodes.Add(wsnNodes.Get(0));
+    if(default_ap == 1)
+        wiredNodes.Add(wsnNodes.Get(n_wirelessNodes/2));
+    else wiredNodes.Add(wsnNodes.Get(0));
     //=============================================
 
 
@@ -269,8 +284,8 @@ int main(int argc, char **argv)
     mobility.SetPositionAllocator("ns3::GridPositionAllocator",
                                   "MinX", DoubleValue(0),
                                   "MinY", DoubleValue(0),
-                                  "DeltaX", DoubleValue(1),
-                                  "DeltaY", DoubleValue(1),
+                                  "DeltaX", DoubleValue(del_x),
+                                  "DeltaY", DoubleValue(del_y),
                                   "GridWidth", UintegerValue(4),
                                   "LayoutType", StringValue("RowFirst"));
     mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
@@ -279,7 +294,17 @@ int main(int argc, char **argv)
 
 
     //===============Installing the Netdevices==========================
+
+    // creating a channel with range propagation loss model  
+    Ptr<SingleModelSpectrumChannel> channel = CreateObject<SingleModelSpectrumChannel> ();
+    Ptr<RangePropagationLossModel> propModel = CreateObject<RangePropagationLossModel> ();
+    Ptr<ConstantSpeedPropagationDelayModel> delayModel = CreateObject<ConstantSpeedPropagationDelayModel> ();
+    channel->AddPropagationLossModel (propModel);
+    channel->SetPropagationDelayModel (delayModel);
+
+    // setting the channel in helper
     LrWpanHelper lrWpanHelper;
+    lrWpanHelper.SetChannel(channel);
     NetDeviceContainer lrwpanDevices = lrWpanHelper.Install(wsnNodes);
 
     lrWpanHelper.AssociateToPan(lrwpanDevices, 0);
@@ -288,11 +313,12 @@ int main(int argc, char **argv)
     internetv6.Install(wsnNodes);
     internetv6.Install(wiredNodes.Get(0));
 
+    //using sixLowPan because lrWpan does not support TCP
     SixLowPanHelper sixLowPanHelper;
     NetDeviceContainer sixLowPanDevices = sixLowPanHelper.Install(lrwpanDevices);
 
     CsmaHelper csmaHelper;
-    csmaHelper.SetChannelAttribute ("DataRate", StringValue ("20Mbps"));
+    csmaHelper.SetChannelAttribute ("DataRate", StringValue ("1Mbps"));
     csmaHelper.SetChannelAttribute ("Delay", StringValue ("0.5ms"));    
     NetDeviceContainer csmaDevices = csmaHelper.Install(wiredNodes);
     //=======================================================
@@ -331,7 +357,12 @@ int main(int argc, char **argv)
 
     //===================Setting up FLOWS using MyApp==============================
     Ptr<Socket> ns3TcpSocket;     
-    for (uint32_t i = 1; i <= n_wirelessNodes; i++)
+        
+    int t_speed = (nPackets_sec * packetSize * 8)/1000; //Kilobits per sec
+    transferSpeed = std::to_string(t_speed) + "Kbps";
+    int j_id = 1;
+    //keep nFlows less than n_wirelessNodes
+    for (uint32_t i = 1; i <= nFlows; i++)
     {
         //Left to Right flow
         ns3TcpSocket = setFlow(Inet6SocketAddress(wiredDeviceInterfaces.GetAddress(0, 1), sinkPort), sinkPort,
@@ -348,8 +379,8 @@ int main(int argc, char **argv)
 
     //================Tracing CWND Change================================
     AsciiTraceHelper asciiTraceHelper;
-    Ptr<OutputStreamWrapper> stream = asciiTraceHelper.CreateFileStream ("pan.cwnd");
-    ns3TcpSocket->TraceConnectWithoutContext ("CongestionWindow", MakeBoundCallback (&CwndChange, stream));
+    Ptr<OutputStreamWrapper> stream = asciiTraceHelper.CreateFileStream ("pan.cwnd"); //DUMMY FILESTREAM, USED NEXT LINE
+    ns3TcpSocket->TraceConnectWithoutContext ("CongestionWindow", MakeBoundCallback (&CwndChange, stream)); //JUST FOR CONSOLE PRINT/PROGRESS
     //===================================================================
 
 
@@ -365,6 +396,7 @@ int main(int argc, char **argv)
 
     int j=0;
     double AvgThroughput = 0.0;
+    double TotalThroughput;
     double packet_loss_ratio = 0.0;
     double packet_delivery_ratio = 0.0;
     Time Jitter;
@@ -372,7 +404,7 @@ int main(int argc, char **argv)
 
 
     //============Simulator init====================
-    Simulator::Stop(Seconds(stop_time));
+    Simulator::Stop(Seconds(stopTime));
     Simulator::Run();
 
 
@@ -391,7 +423,7 @@ int main(int argc, char **argv)
         packet_delivery_ratio = iter->second.rxPackets*100.0;
         packet_delivery_ratio /= iter->second.txPackets;
         NS_LOG_UNCOND("Packet delivery ratio =" << packet_delivery_ratio << "%");
-        packet_loss_ratio = (iter->second.txPackets-iter->second.rxPackets)*100.0;
+        packet_loss_ratio = (iter->second.lostPackets)*100.0;
         packet_loss_ratio /= iter->second.txPackets;
         NS_LOG_UNCOND("Packet loss ratio =" << packet_loss_ratio << "%");
         NS_LOG_UNCOND("Delay =" <<iter->second.delaySum);
@@ -407,20 +439,69 @@ int main(int argc, char **argv)
 
         j = j + 1;
     }
-    packet_loss_ratio = ((LostPackets*100.0)/SentPackets);
-    packet_delivery_ratio = ((ReceivedPackets*100.0)/SentPackets);
-    AvgThroughput = AvgThroughput/j;
+    if(SentPackets){
+        packet_loss_ratio = ((LostPackets*100.0)/SentPackets);
+        packet_delivery_ratio = ((ReceivedPackets*100.0)/SentPackets);
+    }
+
+    TotalThroughput = AvgThroughput;
+    AvgThroughput = AvgThroughput / j;
+    if(ReceivedPackets){
+        Delay = Delay / ReceivedPackets;
+        Jitter = Jitter / ReceivedPackets;
+    }
+
+    
     NS_LOG_UNCOND("--------Total Results of the simulation----------"<<std::endl);
+    NS_LOG_UNCOND(transferSpeed << ", Nodes: " << n_wirelessNodes << ", Flows: " << nFlows << ", Packets/sec: " << nPackets_sec << ", Range: " << range);
+    
     NS_LOG_UNCOND("Total sent packets  =" << SentPackets);
     NS_LOG_UNCOND("Total Received Packets =" << ReceivedPackets);
     NS_LOG_UNCOND("Total Lost Packets =" << LostPackets);
     NS_LOG_UNCOND("Packet Loss ratio =" << packet_loss_ratio << "%");
     NS_LOG_UNCOND("Packet delivery ratio =" << packet_delivery_ratio << "%");
-    NS_LOG_UNCOND("Average Throughput =" << AvgThroughput<< "Kbps");
-    NS_LOG_UNCOND("End to End Delay =" << Delay);
-    NS_LOG_UNCOND("End to End Jitter delay =" << Jitter);
+    NS_LOG_UNCOND("Average Per Node Throughput =" << AvgThroughput << "Kbps");
+    NS_LOG_UNCOND("Total Network Throughput =" << TotalThroughput << "Kbps");
+    NS_LOG_UNCOND("Average End to End Delay =" << Delay.GetMilliSeconds());
+    NS_LOG_UNCOND("Average End to End Jitter delay =" << Jitter.GetMilliSeconds());
     NS_LOG_UNCOND("Total Flow id " << j);
     //=====================================================================
+
+
+    //OPENED IN APPEND MODE, SO REMOVE FILES FIRST
+    if(node_var){
+        std::ofstream myfile;
+        myfile.open ("taskA_low_rate_node_vs_all.txt", std::ios::app);
+        myfile << n_wirelessNodes << " " << AvgThroughput << " ";
+        myfile << TotalThroughput << " " << packet_delivery_ratio << " ";
+        myfile << packet_loss_ratio << " " << Delay.GetMilliSeconds() << " ";
+        myfile << Jitter.GetMilliSeconds() << "\n";
+        myfile.close();
+    }else if(range_var){
+        std::ofstream myfile;
+        myfile.open ("taskA_low_rate_range_vs_all.txt", std::ios::app);
+        myfile << range << " " << AvgThroughput << " ";
+        myfile << TotalThroughput << " " << packet_delivery_ratio << " ";
+        myfile << packet_loss_ratio << " " << Delay.GetMilliSeconds() << " ";
+        myfile << Jitter.GetMilliSeconds() << "\n";
+        myfile.close();
+    }else if(flow_var){
+        std::ofstream myfile;
+        myfile.open ("taskA_low_rate_flow_vs_all.txt", std::ios::app);
+        myfile << nFlows << " " << AvgThroughput << " ";
+        myfile << TotalThroughput << " " << packet_delivery_ratio << " ";
+        myfile << packet_loss_ratio << " " << Delay.GetMilliSeconds() << " ";
+        myfile << Jitter.GetMilliSeconds() << "\n";
+        myfile.close();
+    }else if(packet_var){
+        std::ofstream myfile;
+        myfile.open ("taskA_low_rate_packet_vs_all.txt", std::ios::app);
+        myfile << nPackets_sec << " " << AvgThroughput << " ";
+        myfile << TotalThroughput << " " << packet_delivery_ratio << " ";
+        myfile << packet_loss_ratio << " " << Delay.GetMilliSeconds() << " ";
+        myfile << Jitter.GetMilliSeconds() << "\n";
+        myfile.close();
+    }
 
     
     
