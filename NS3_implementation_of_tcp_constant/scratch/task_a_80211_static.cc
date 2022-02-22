@@ -26,6 +26,8 @@ TOPOLOGY:
 #include "ns3/error-rate-model.h"
 #include "ns3/yans-error-rate-model.h"
 #include "ns3/yans-wifi-phy.h"
+#include <iostream>
+#include <fstream>
 
 
 typedef uint32_t uint;
@@ -200,8 +202,8 @@ CwndChange (Ptr<OutputStreamWrapper> stream, uint32_t oldCwnd, uint32_t newCwnd)
 static void
 RxDrop(Ptr<PcapFileWrapper> file, Ptr<const Packet> p)
 {
-    //NS_LOG_UNCOND ("RxDrop at " << Simulator::Now ().GetSeconds ());
-    file->Write(Simulator::Now(), p);
+    NS_LOG_UNCOND ("RxDrop at " << Simulator::Now ().GetSeconds ());
+    //file->Write(Simulator::Now(), p);
 }
 
 //=============sets a single flow from a sender to sink=====================================
@@ -230,27 +232,53 @@ Ptr<Socket> setFlow(Address sinkAddress, uint sinkPort, Ptr<Node> hostNode, Ptr<
 //========GLOBAL VARS==========
 
 //NO OF NODES ON EACH SIDE OF DUMBBELL
-uint32_t nWifi = 20;
-uint32_t range = 50; //10m
-uint32_t flows_by_two = 5;
+//ALWAYS KEEP nFLows/2 less than nWifi/4
+uint32_t nWifi = 60;
+uint32_t range = 20;
+uint32_t nFlows = 30;
+uint32_t nPackets_sec = 400;
+
+uint32_t node_var = 0;
+uint32_t range_var = 0;
+uint32_t flow_var = 0;
+uint32_t packet_var = 0;
+
 
 uint port = 9000;
-uint numPackets = 200;
-uint packetSize = 1024;
-std::string transferSpeed = "10Mbps"; //App dataRate
+uint packetSize = 1024; //in bytes
+
+//App data rate calculated as nPackets_sec * packetSize
+std::string transferSpeed;
 
 double sinkStart = 0;
 double appStart = 1;
 double stopTime = 20;
 double ErrorRate = 0.000001;
 
-const char *p2p_data_rate = "15Mbps";
-const char *p2p_delay = "0.5ms";
+const char *p2p_data_rate = "1Mbps";
+const char *p2p_delay = "2ms";
+
+uint numPackets = 100000;
 //=============================
 
 
 int main(int argc, char **argv)
 {
+    CommandLine cmd (__FILE__);
+    cmd.AddValue ("nFlows", "no of flows", nFlows);
+    cmd.AddValue ("nWifi", "no of nodes", nWifi);
+    cmd.AddValue ("nPackets_sec", "no of packets per sec", nPackets_sec);
+    cmd.AddValue ("range", "range of transmission", range);
+
+    cmd.AddValue ("node_var", "enable variable node data to be printed", node_var);
+    cmd.AddValue ("range_var", "enable variable range data to be printed", range_var);
+    cmd.AddValue ("flow_var", "enable variable flow data to be printed", flow_var);
+    cmd.AddValue ("packet_var", "enable variable packet_var data to be printed", packet_var);
+    
+    cmd.Parse (argc, argv);    
+
+
+
     //changing default Congestion Control Algo by adding this line:
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::TcpWestwood"));
     //set max coverage
@@ -425,6 +453,7 @@ int main(int argc, char **argv)
     // {
     //     NS_LOG_UNCOND("\tid = " << wifiStaNodesL.Get(i)->GetId());
     // }
+    //Randomly select a few nodes to install ERROR MODEL
     Ptr<RateErrorModel> em = CreateObject<RateErrorModel> ();
     em->SetAttribute ("ErrorRate", DoubleValue (ErrorRate));
     uint32_t index = nWifi/2 + 4;
@@ -559,7 +588,12 @@ int main(int argc, char **argv)
 
     //==================Setting up the flows: Left to Right, Top to Bottom Nodes=====================
     Ptr<Socket> ns3TcpSocket;    
-    for(uint32_t i = 0; i < nWifi/4; i++)
+    
+    int t_speed = (nPackets_sec * packetSize * 8)/1000; //Kilobits per sec
+    transferSpeed = std::to_string(t_speed) + "Kbps";
+
+    //nWifi/4 nodes on each AP, so nFlows/2 than it
+    for(uint32_t i = 0; i < nFlows/2; i++)
     {
         //Left to Right flow
         ns3TcpSocket = setFlow(InetSocketAddress(right_wireless_interfaces.GetAddress(i), port), port,
@@ -577,8 +611,8 @@ int main(int argc, char **argv)
 
     //last assigned left node
     AsciiTraceHelper asciiTraceHelper;
-	Ptr<OutputStreamWrapper> stream_cwnd = asciiTraceHelper.CreateFileStream("baseline_westwood.cwnd");    
-    ns3TcpSocket->TraceConnectWithoutContext("CongestionWindow", MakeBoundCallback (&CwndChange, stream_cwnd));
+	Ptr<OutputStreamWrapper> stream_cwnd = asciiTraceHelper.CreateFileStream("baseline_westwood.cwnd");    //DUMMY FILE, NOT PRINTED
+    ns3TcpSocket->TraceConnectWithoutContext("CongestionWindow", MakeBoundCallback (&CwndChange, stream_cwnd)); //JUST FOR CONSOLE PROGRESS
     //===================================================
 
 
@@ -598,6 +632,7 @@ int main(int argc, char **argv)
 
     int j=0;
     double AvgThroughput = 0.0;
+    double TotalThroughput;
     double packet_loss_ratio = 0.0;
     double packet_delivery_ratio = 0.0;
     Time Jitter;
@@ -605,8 +640,10 @@ int main(int argc, char **argv)
 
     //==============Simulation Start=============
     Simulator::Stop(Seconds(stopTime));
-    Simulator::Run();
+    NS_LOG_UNCOND("Nodes: " << nWifi << ", Flows: " << nFlows << ", Packets/sec: " << nPackets_sec << ", Range: " << range);
+    NS_LOG_UNCOND("Starting simulation, printing in console after ready..."); 
 
+    Simulator::Run();
 
     //=============Metric Calculation=========
     Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowmon.GetClassifier ());
@@ -623,7 +660,7 @@ int main(int argc, char **argv)
         packet_delivery_ratio = iter->second.rxPackets*100.0;
         packet_delivery_ratio /= iter->second.txPackets;
         NS_LOG_UNCOND("Packet delivery ratio =" << packet_delivery_ratio << "%");
-        packet_loss_ratio = (iter->second.txPackets-iter->second.rxPackets)*100.0;
+        packet_loss_ratio = (iter->second.lostPackets)*100.0;
         packet_loss_ratio /= iter->second.txPackets;
         NS_LOG_UNCOND("Packet loss ratio =" << packet_loss_ratio << "%");
         NS_LOG_UNCOND("Delay =" <<iter->second.delaySum);
@@ -641,19 +678,64 @@ int main(int argc, char **argv)
     }
     packet_loss_ratio = ((LostPackets*100.0)/SentPackets);
     packet_delivery_ratio = ((ReceivedPackets*100.0)/SentPackets);
-    AvgThroughput = AvgThroughput/j;
+    TotalThroughput = AvgThroughput;
+    AvgThroughput = AvgThroughput / j;
+    Delay = Delay / ReceivedPackets;
+    Jitter = Jitter / ReceivedPackets;
+    
     NS_LOG_UNCOND("--------Total Results of the simulation----------"<<std::endl);
+    NS_LOG_UNCOND("Nodes: " << nWifi << ", Flows: " << nFlows << ", Packets/sec: " << nPackets_sec << ", Range: " << range);
+    
     NS_LOG_UNCOND("Total sent packets  =" << SentPackets);
     NS_LOG_UNCOND("Total Received Packets =" << ReceivedPackets);
     NS_LOG_UNCOND("Total Lost Packets =" << LostPackets);
     NS_LOG_UNCOND("Packet Loss ratio =" << packet_loss_ratio << "%");
     NS_LOG_UNCOND("Packet delivery ratio =" << packet_delivery_ratio << "%");
-    NS_LOG_UNCOND("Average Throughput =" << AvgThroughput<< "Kbps");
-    NS_LOG_UNCOND("End to End Delay =" << Delay);
-    NS_LOG_UNCOND("End to End Jitter delay =" << Jitter);
+    NS_LOG_UNCOND("Average Per Node Throughput =" << AvgThroughput << "Kbps");
+    NS_LOG_UNCOND("Total Network Throughput =" << TotalThroughput << "Kbps");
+    NS_LOG_UNCOND("Average End to End Delay =" << Delay.GetMilliSeconds());
+    NS_LOG_UNCOND("Average End to End Jitter delay =" << Jitter.GetMilliSeconds());
     NS_LOG_UNCOND("Total Flow id " << j);
+    //=====================================================================
 
 
+    //OPENED IN APPEND MODE, SO REMOVE FILES FIRST
+    if(node_var){
+        std::ofstream myfile;
+        myfile.open ("taskA_high_rate_node_vs_all.txt", std::ios::app);
+        myfile << nWifi << " " << AvgThroughput << " ";
+        myfile << TotalThroughput << " " << packet_delivery_ratio << " ";
+        myfile << packet_loss_ratio << " " << Delay.GetMilliSeconds() << " ";
+        myfile << Jitter.GetMilliSeconds() << "\n";
+        myfile.close();
+    }else if(range_var){
+        std::ofstream myfile;
+        myfile.open ("taskA_high_rate_range_vs_all.txt", std::ios::app);
+        myfile << range << " " << AvgThroughput << " ";
+        myfile << TotalThroughput << " " << packet_delivery_ratio << " ";
+        myfile << packet_loss_ratio << " " << Delay.GetMilliSeconds() << " ";
+        myfile << Jitter.GetMilliSeconds() << "\n";
+        myfile.close();
+    }else if(flow_var){
+        std::ofstream myfile;
+        myfile.open ("taskA_high_rate_flow_vs_all.txt", std::ios::app);
+        myfile << nFlows << " " << AvgThroughput << " ";
+        myfile << TotalThroughput << " " << packet_delivery_ratio << " ";
+        myfile << packet_loss_ratio << " " << Delay.GetMilliSeconds() << " ";
+        myfile << Jitter.GetMilliSeconds() << "\n";
+        myfile.close();
+    }else if(packet_var){
+        std::ofstream myfile;
+        myfile.open ("taskA_high_rate_packet_vs_all.txt", std::ios::app);
+        myfile << nPackets_sec << " " << AvgThroughput << " ";
+        myfile << TotalThroughput << " " << packet_delivery_ratio << " ";
+        myfile << packet_loss_ratio << " " << Delay.GetMilliSeconds() << " ";
+        myfile << Jitter.GetMilliSeconds() << "\n";
+        myfile.close();
+    }
+
+
+    
     Simulator::Destroy();
     return 0;    
     
