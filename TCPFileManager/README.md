@@ -16,17 +16,23 @@ ii. If the file is uploaded in response to a request, it must be public and the 
 g. When a requested file has been uploaded, the server sends a message to the person who requested for that file. Multiple students can upload the same requested file and the server will send as many messages.
 
 ### _Supported Commands_
-----------------------------------
-> Print user list: pul
-> View my files: ls
-> View other's files: ls -o user_id
-----------------------------------
-> Upload file: up file_name access_param
-> Upload file against a request: upreq file_name requestID
-----------------------------------
-> Download my file: down access_param file_name
-> Download other's file: down -o user_id file_name
-> Download using fileID: down fileID
-----------------------------------
-> Display Messages: dm
----------------------------------- Request file: req
+
+
+- Print user list: pul
+- View my files: ls
+- View other's files: ls -o user_id
+
+
+
+- Upload file: up file_name access_param
+- Upload file against a request: upreq file_name requestID
+
+
+
+- Download my file: down access_param file_name
+- Download other's file: down -o user_id file_name
+- Download using fileID: down fileID
+
+
+
+- Display Messages: dm
