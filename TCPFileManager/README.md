@@ -36,3 +36,7 @@ g. When a requested file has been uploaded, the server sends a message to the pe
 
 
 - Display Messages: dm
+
+
+### _Specifications_
+For detailed implementation specifications, check out the [Specification](https://github.com/ksaifahmed/networking_ns3_CSE322/blob/main/TCPFileManager/Specifications.pdf)
